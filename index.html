@@ -108,13 +108,15 @@
     </div>
     <div class="chips" id="nameChips" aria-label="Listedeki isimler"></div>
     <details id="aiBox" style="margin-top:12px">
-      <summary>El yazısı okuma ayarı (Claude API anahtarı)</summary>
-      <p class="status" style="margin-top:6px">El yazısı listeleri doğru okumak için fotoğraf Claude'a gönderilir. Anahtarı
-        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> adresinden alabilirsin.
-        Anahtar yalnızca bu telefonun tarayıcısında saklanır ve sadece api.anthropic.com'a gönderilir. Anahtar yoksa basit metin okuma kullanılır (el yazısında hatalı olabilir).</p>
+      <summary>El yazısı okuma ayarı (ücretsiz API anahtarı)</summary>
+      <p class="status" style="margin-top:6px">El yazısı listeyi okumak için fotoğraf bir yapay zekâ servisine gönderilir.
+        <b>Ücretsiz:</b> <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+        adresinden Google hesabınla <b>Create API key</b> de, çıkan <code>AIza…</code> anahtarını buraya yapıştır (kredi kartı gerekmez).
+        İstersen ücretli Claude anahtarı (<code>sk-ant-…</code>) da girebilirsin; uygulama anahtarın türünü kendisi tanır.
+        Anahtar yalnızca bu telefonun tarayıcısında saklanır.</p>
       <div class="row">
         <label style="flex:1;min-width:200px">API anahtarı
-          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+          <input type="password" id="apiKey" placeholder="AIza... ya da sk-ant-..." autocomplete="off">
         </label>
         <button id="saveKey" type="button">Kaydet</button>
         <button id="delKey" type="button" class="ghost">Sil</button>
@@ -520,7 +522,7 @@
       $("ocrText").value = data.text;
       draft = true;
       $("status").textContent = "Basit okuma tamamlandı ama el yazısında sonuç genellikle hatalıdır. "
-        + "Metni aşağıda kontrol et; doğruysa \"Kaydet ve tara\"ya bas. Doğru okuma için Claude API anahtarı gir.";
+        + "Metni aşağıda kontrol et; doğruysa \"Kaydet ve tara\"ya bas. Doğru okuma için ücretsiz Gemini API anahtarı gir.";
       $("ocrText").scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (err) {
       console.error(err);
@@ -577,11 +579,9 @@
     return { m, y: roster.year, text: lines.join("\n") };
   }
 
-  async function runClaude(file, key) {
-    $("progressWrap").style.display = "none";
-    $("status").textContent = "Fotoğraf Claude ile okunuyor… (yaklaşık 30 saniye – 1 dakika)";
+  function rosterPrompt() {
     const t = new Date();
-    const prompt = `Bu fotoğraf bir hastane ekibinin aylık nöbet listesi (genellikle el yazısı, Türkçe).
+    return `Bu fotoğraf bir hastane ekibinin aylık nöbet listesi (genellikle el yazısı, Türkçe).
 Listedeki her günü oku:
 - day: gün numarası (daire içine alınmış olabilir, o günler hafta sonu/tatil işaretidir).
 - nobet: o günün ana nöbet sütunundaki isimler (genelde "İsim - İsim" şeklinde iki kişi).
@@ -589,7 +589,83 @@ Listedeki her günü oku:
 Kağıdın kenarındaki kişi başı toplam/özet tablolarını gün olarak alma.
 İsimleri listede en sık geçen doğru yazımıyla ve ilk harfi büyük yaz (aynı kişinin farklı okunan yazımlarını listedeki en sık yazımla birleştir).
 Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getDate()}.${t.getMonth() + 1}.${t.getFullYear()}) en yakın geçerli yılını seç.`;
+  }
 
+  // Anahtar türüne göre servis seç: Google Gemini (ücretsiz, "AIza…") ya da Claude ("sk-ant-…")
+  const provider = key => key.startsWith("sk-ant-") ? "claude" : "gemini";
+
+  // ----- Google Gemini (ücretsiz katman) -----
+  // Model adları zamanla değiştiği için sırayla dene; bulunamayan modelde bir sonrakine geç
+  const GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"];
+  const GEMINI_SCHEMA = {
+    type: "OBJECT",
+    properties: {
+      month: { type: "INTEGER", description: "Ay numarası, 1-12" },
+      year: { type: "INTEGER" },
+      days: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            day: { type: "INTEGER" },
+            nobet: { type: "ARRAY", items: { type: "STRING" } },
+            ameliyathane: { type: "ARRAY", items: { type: "STRING" } }
+          },
+          required: ["day", "nobet", "ameliyathane"],
+          propertyOrdering: ["day", "nobet", "ameliyathane"]
+        }
+      }
+    },
+    required: ["month", "year", "days"],
+    propertyOrdering: ["month", "year", "days"]
+  };
+
+  async function runGemini(file, key) {
+    $("progressWrap").style.display = "none";
+    $("status").textContent = "Fotoğraf Gemini ile okunuyor… (yaklaşık 10–40 saniye)";
+    try {
+      const data = await toJpegBase64(file);
+      const body = JSON.stringify({
+        contents: [{ role: "user", parts: [
+          { inline_data: { mime_type: "image/jpeg", data } },
+          { text: rosterPrompt() }
+        ] }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: GEMINI_SCHEMA, temperature: 0 }
+      });
+      let out = null, lastErr = "";
+      for (const model of GEMINI_MODELS) {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          body
+        });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok) { out = j; break; }
+        const msg = j?.error?.message || res.statusText;
+        if (res.status === 404) { lastErr = msg; continue; }               // model yok → sıradakini dene
+        if (res.status === 400 && /api key/i.test(msg)) throw new Error("API anahtarı geçersiz. Ayarlardan kontrol et.");
+        if (res.status === 403) throw new Error("Anahtarın bu servise izni yok: " + msg);
+        if (res.status === 429) throw new Error("Ücretsiz kullanım sınırı doldu. Birkaç dakika (ya da yarın) sonra tekrar dene.");
+        throw new Error(`${res.status}: ${msg}`);
+      }
+      if (!out) throw new Error("Uygun Gemini modeli bulunamadı. " + lastErr);
+      const cand = out.candidates?.[0];
+      if (!cand) throw new Error("Gemini yanıt vermedi" + (out.promptFeedback?.blockReason ? ` (${out.promptFeedback.blockReason})` : "") + ". Tekrar dene.");
+      if (cand.finishReason === "MAX_TOKENS") throw new Error("Yanıt yarıda kesildi, tekrar dene.");
+      const text = (cand.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join("");
+      saveRoster(rosterToText(JSON.parse(text)).text);
+      $("status").textContent += " Okunan listeyi aşağıdan kontrol edebilirsin.";
+    } catch (err) {
+      console.error(err);
+      $("status").textContent = "Gemini ile okuma başarısız: " + (err.message || err);
+    }
+  }
+
+  // ----- Claude (ücretli) -----
+  async function runClaude(file, key) {
+    $("progressWrap").style.display = "none";
+    $("status").textContent = "Fotoğraf Claude ile okunuyor… (yaklaşık 30 saniye – 1 dakika)";
+    const prompt = rosterPrompt();
     try {
       const data = await toJpegBase64(file);
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -668,11 +744,11 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     pv.src = URL.createObjectURL(f);
     pv.style.display = "block";
     const key = getKey();
-    if (key) runClaude(f, key);
+    if (key) (provider(key) === "claude" ? runClaude : runGemini)(f, key);
     else {
       $("aiBox").open = true;
       $("aiBox").scrollIntoView({ behavior: "smooth", block: "center" });
-      $("status").innerHTML = "El yazısı listeyi okumak için <b>Claude API anahtarı</b> gerekli. Anahtarı yukarıya girip fotoğrafı tekrar seç. "
+      $("status").innerHTML = "El yazısı listeyi okumak için <b>API anahtarı</b> gerekli (Google Gemini anahtarı ücretsiz). Anahtarı yukarıya girip fotoğrafı tekrar seç. "
         + "<button type=\"button\" class=\"ghost\" id=\"tryOcr\">Yine de basit okumayla dene</button>";
       $("tryOcr").onclick = () => runOcr(f);
     }
@@ -682,7 +758,10 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   if (!getKey()) $("aiBox").open = true;
   $("saveKey").onclick = () => {
     try { localStorage.setItem(KEY_STORE, $("apiKey").value.trim()); } catch (_) {}
-    $("status").textContent = $("apiKey").value.trim() ? "API anahtarı kaydedildi. Artık fotoğraf yükleyebilirsin." : "Anahtar boş.";
+    const k = $("apiKey").value.trim();
+    $("status").textContent = k
+      ? `${provider(k) === "claude" ? "Claude" : "Gemini"} anahtarı kaydedildi. Artık fotoğraf yükleyebilirsin.`
+      : "Anahtar boş.";
   };
   $("delKey").onclick = () => {
     try { localStorage.removeItem(KEY_STORE); } catch (_) {}

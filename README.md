@@ -16,21 +16,25 @@ Uygulama bir PWA'dır: telefona yüklenince ana ekranda simgesiyle açılır, ta
 
 1. Sayfayı aç, **İsim** alanına ismini yaz ya da altta çıkan isim düğmelerinden birine dokun (bir kez seçmen yeterli, hatırlanır).
    Fotoğraf alanından o ayın listesinin fotoğrafını seç.
-2. Fotoğraf Claude'a gönderilir; el yazısı liste okunur, ay/yıl başlıktan alınır ve günler takvimde işaretlenir.
+2. Fotoğraf Gemini'ye (ya da Claude'a) gönderilir; el yazısı liste okunur, ay/yıl başlıktan alınır ve günler takvimde işaretlenir.
 3. "Okunan metin" kutusunda sonucu kontrol et; hata varsa düzeltip **Metni yeniden tara**'ya bas.
 4. Her ayın listesi bir kez kaydedilir ve herkes için ortaktır: isim değiştirince aynı listelerden o kişinin günleri anında gösterilir.
    Ay okları ile geçmiş aylara bakabilirsin.
 5. **Takvime aktar (.ics)** ile telefon takvimine ekleyebilirsin.
 
-## İlk kurulum (her telefonda bir kez)
+## İlk kurulum (her telefonda bir kez): ücretsiz API anahtarı
 
-El yazısını okumak için bir Claude API anahtarı gerekir:
+El yazısını okumak için bir yapay zekâ API anahtarı gerekir. Ücretsiz seçenek Google Gemini:
 
-1. https://console.anthropic.com adresinde hesap aç, kredi yükle, **API Keys** bölümünden anahtar oluştur.
-2. Uygulamada **El yazısı okuma ayarı** bölümüne anahtarı yapıştırıp **Kaydet**'e bas.
+1. https://aistudio.google.com/apikey adresini aç, Google hesabınla giriş yap.
+2. **Create API key** de, çıkan `AIza…` ile başlayan anahtarı kopyala (kredi kartı gerekmez).
+3. Uygulamada **El yazısı okuma ayarı** bölümüne yapıştırıp **Kaydet**'e bas.
 
-Anahtar yalnızca o tarayıcıda (localStorage) saklanır ve sadece `api.anthropic.com`'a gönderilir; depoya veya başka bir yere yazılmaz.
-Anahtar girilmezse tarayıcıda çalışan Tesseract OCR kullanılır; bu yöntem basılı listelerde çalışır ama el yazısında güvenilir değildir.
+İstenirse ücretli Claude anahtarı (`sk-ant-…`, https://console.anthropic.com) da girilebilir; uygulama anahtarın türünü kendisi tanır.
+Anahtar yalnızca o tarayıcıda (localStorage) saklanır ve sadece ilgili servise gönderilir; depoya yazılmaz.
+Not: Google'ın ücretsiz katmanında gönderilen içerik Google tarafından ürün geliştirmede kullanılabilir (fotoğraftaki isimler dahil).
+
+Anahtar girilmezse uygulama anahtar ister; "Yine de basit okumayla dene" (Tesseract) seçilirse sonuç sadece taslaktır.
 
 ## Metin biçimi
 
@@ -48,5 +52,3 @@ Başka biçimler de tanınır: `05.11.2026`, `12 Kasım`, `Tuba 3 7 12` (varsay�
 (`Tubo`, `Tuha` → `Tuba`); ancak listede ayrı bir kişi olarak düzenli geçen isimler (ör. hem `Tuba` hem `Tuğba` varsa) karıştırılmaz.
 Takvimde bir güne dokunarak yapılan elle düzeltmeler sadece o isim için saklanır.
 
-API anahtarı yokken fotoğraf yüklenirse uygulama anahtar ister; "Yine de basit okumayla dene" seçilirse sonuç sadece taslak olarak gösterilir,
-"Kaydet ve tara"ya basılmadıkça kayıtlı listenin üzerine yazılmaz.
