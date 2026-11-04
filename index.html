@@ -32,6 +32,8 @@
          padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
   .export { margin-top: 12px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; }
   .export a { color: var(--accent); }
+  .export li.done a { color: var(--muted); text-decoration: line-through; }
+  .export li.done::after { content: " ✓"; color: var(--surg); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .chip { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; font-size: .9rem; }
   .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -150,11 +152,12 @@
       <p id="exportTitle" class="status" style="margin-top:0"></p>
       <div class="row">
         <button type="button" id="expApple">iPhone Takvimi'ne ekle</button>
+        <button type="button" id="expAndroid">Tümünü takvim dosyası olarak indir</button>
         <button type="button" id="expShare" class="ghost">Dosyayı paylaş / kaydet</button>
       </div>
       <p class="status" id="expHint"></p>
-      <details>
-        <summary>Google Takvim'e tek tek ekle</summary>
+      <details id="expOneBox">
+        <summary id="expOneTitle">Google Takvim'e tek tek ekle</summary>
         <ul class="matches" id="expGoogle"></ul>
       </details>
     </div>
@@ -802,6 +805,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   // ---------- .ics export ----------
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /android/i.test(navigator.userAgent);
   const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   const ymd = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
   const nextDay = k => { const d = new Date(k + "T00:00:00"); d.setDate(d.getDate() + 1); return ymd(d); };
@@ -840,18 +844,37 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     if (!events.length) { alert(`${MONTHS[view.m]} ${view.y} ayında ${name} için nöbet yok.`); return; }
     $("exportTitle").textContent = `${name} – ${MONTHS[view.m]} ${view.y}: ${events.length} etkinlik eklenecek (tüm gün).`;
     $("expApple").hidden = !isIOS;
+    $("expAndroid").hidden = !isAndroid;
+    $("expShare").hidden = isAndroid;     // Android'de takvim dosyası paylaşılamıyor, indirme düğmesi var
     $("expHint").innerHTML = isIOS
       ? (isStandalone()
           ? "Açılan ekranda <b>Tümünü Ekle</b>'ye bas. Ekran boş kalırsa uygulamayı kapatıp aynı adresi <b>Safari</b>'de aç ve orada dene."
           : "Açılan ekranda <b>Tümünü Ekle</b>'ye bas ve takvimi seç.")
-      : "“Dosyayı paylaş / kaydet” ile Takvim uygulamasını seç ya da indirilen dosyayı aç; açılmazsa aşağıdaki Google Takvim bağlantılarını kullan.";
+      : isAndroid
+        ? "İndirme bitince bildirimdeki (ya da İndirilenler'deki) dosyaya dokun ve <b>Takvim</b> uygulamasını seç "
+          + "(Samsung Takvim, Google Takvim…), sonra <b>Kaydet / İçe aktar</b>. Dosya açılmazsa aşağıdan nöbetleri tek tek ekle."
+        : "“Dosyayı paylaş / kaydet” ile Takvim uygulamasını seç ya da indirilen dosyayı aç; açılmazsa aşağıdaki Google Takvim bağlantılarını kullan.";
+    $("expOneTitle").textContent = isAndroid ? "Tek tek ekle (telefonun takvim uygulamasında açılır)" : "Google Takvim'e tek tek ekle";
+    $("expOneBox").open = isAndroid;
     $("expGoogle").innerHTML = events.map(e => {
-      const u = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+      const google = "https://calendar.google.com/calendar/render?action=TEMPLATE"
         + "&text=" + encodeURIComponent(e.title)
         + "&dates=" + e.date.replace(/-/g, "") + "/" + nextDay(e.date)
         + "&details=" + encodeURIComponent("Nöbet Takvimi");
-      return `<li><a href="${u}" target="_blank" rel="noopener">${fmt(e.date)} – ${esc(e.kind)}</a></li>`;
+      let href = google;
+      if (isAndroid) {
+        // Android: telefonun varsayılan takvim uygulamasında "yeni etkinlik" ekranını doldurulmuş aç;
+        // açılamazsa Google Takvim bağlantısına düş
+        const [yy, mm, dd] = e.date.split("-").map(Number);
+        const begin = Date.UTC(yy, mm - 1, dd), end = Date.UTC(yy, mm - 1, dd + 1);
+        href = "intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;"
+          + "S.title=" + encodeURIComponent(e.title) + ";"
+          + "l.beginTime=" + begin + ";l.endTime=" + end + ";B.allDay=true;"
+          + "S.browser_fallback_url=" + encodeURIComponent(google) + ";end";
+      }
+      return `<li><a href="${href}"${isAndroid ? "" : ' target="_blank" rel="noopener"'}>${fmt(e.date)} – ${esc(e.kind)}</a></li>`;
     }).join("");
+    $("expGoogle").onclick = ev => { const li = ev.target.closest("li"); if (li) li.classList.add("done"); };
     panel.hidden = false;
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
@@ -869,6 +892,19 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     const d = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     const n = `${fold(currentName()).replace(/[^a-z0-9]+/g, "-")}-${ymKey(view.y, view.m)}`;
     location.href = `takvim.ics?n=${encodeURIComponent(n)}&d=${d}`;
+  }
+
+  // Android: tüm ayı .ics dosyası olarak indir (açınca takvim uygulaması içe aktarır)
+  function exportAndroid() {
+    const name = currentName();
+    const fileName = `${fold(name).replace(/\s+/g, "-")}-${ymKey(view.y, view.m)}-nobet.ics`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([buildIcs(monthEvents())], { type: "text/calendar" }));
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
 
   // Paylaşım menüsü (Takvim / Dosyalar / WhatsApp…) ya da indirme
@@ -954,6 +990,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   $("ics").onclick = exportIcs;
   $("expApple").onclick = exportApple;
   $("expShare").onclick = exportShare;
+  $("expAndroid").onclick = exportAndroid;
 
   refresh();
 
