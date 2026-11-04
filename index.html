@@ -301,14 +301,36 @@
     return null;
   }
 
-  // İsim kelime olarak geçiyor mu? ("Tuba" → "Tuba Kaya" eşleşir, "Tuğba" / "Tubanur" eşleşmez)
+  // İki kelime arasında en fazla 1 harf farkı var mı? (ekleme, silme ya da değiştirme)
+  function oneEditAway(a, b) {
+    if (Math.abs(a.length - b.length) > 1) return false;
+    let i = 0, j = 0, diff = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++diff > 1) return false;
+      if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+    }
+    return diff + (a.length - i) + (b.length - j) <= 1;
+  }
+
+  // Listede başka bir kişi olarak düzenli geçen isimler (ör. hem Tuba hem Tuğba varsa karıştırma)
+  let knownNames = new Set();
+  let draft = false;   // metin kutusunda henüz kaydedilmemiş okuma var
+
+  // Kelime, aranan isimle eşleşiyor mu? Tam eşleşme ya da el yazısı okuma hatası ("Tubo" ≈ "Tuba")
+  function wordMatches(word, part) {
+    if (word === part) return true;
+    return part.length >= 4 && !knownNames.has(word) && oneEditAway(word, part);
+  }
+
+  // İsim kelime olarak geçiyor mu? ("Tuba" → "Tuba Kaya", "Tubo" eşleşir; "Tubanur" eşleşmez)
   function lineHasName(line, name) {
     const n = fold(name.trim());
     if (!n) return false;
-    const words = fold(line).split(/[^a-z0-9çöşü]+/).filter(Boolean);
+    const words = fold(line).split(/[^a-z0-9]+/).filter(Boolean);
     const parts = n.split(/\s+/);
     for (let i = 0; i + parts.length <= words.length; i++) {
-      if (parts.every((p, j) => words[i + j] === p)) return true;
+      if (parts.every((p, j) => wordMatches(words[i + j], p))) return true;
     }
     return false;
   }
@@ -343,6 +365,7 @@
 
   // Seçili isim için tüm ayların listelerinden takvimi hesapla
   function compute() {
+    knownNames = new Set(rosterNames().flatMap(n => fold(n).split(/\s+/)));
     duties = new Map();
     const name = currentName();
     if (!name) return;
@@ -378,6 +401,7 @@
 
   // Okunan / düzeltilen metni o ayın listesi olarak kaydet
   function saveRoster(text) {
+    draft = false;
     const head = headerMonth(text);
     let y = +$("defYear").value || today.getFullYear(), m = +$("defMonth").value;
     if (head) { m = head.m; if (head.y) y = head.y; }
@@ -448,7 +472,7 @@
         : hasRoster ? `${name} bu ayın listesinde yok.` : "Bu ay için liste yok. Listenin fotoğrafını yükle.";
 
     // Bu ayın metni ve eşleşen satırlar
-    if (document.activeElement !== $("ocrText")) $("ocrText").value = rosters[prefix] || "";
+    if (document.activeElement !== $("ocrText") && !draft) $("ocrText").value = rosters[prefix] || "";
     $("matches").innerHTML = name && hasRoster
       ? parseRoster(rosters[prefix], y, m, name).rows.map(r => `<li>${r}</li>`).join("")
       : "";
@@ -492,7 +516,12 @@
       const { data } = await Tesseract.recognize(canvas, "tur+eng", {
         logger: info => { if (info.status === "recognizing text") $("progress").value = info.progress; }
       });
-      saveRoster(data.text);
+      // El yazısında bu okuma genelde hatalıdır: kayıtlı listenin üzerine yazma, taslak olarak göster
+      $("ocrText").value = data.text;
+      draft = true;
+      $("status").textContent = "Basit okuma tamamlandı ama el yazısında sonuç genellikle hatalıdır. "
+        + "Metni aşağıda kontrol et; doğruysa \"Kaydet ve tara\"ya bas. Doğru okuma için Claude API anahtarı gir.";
+      $("ocrText").scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (err) {
       console.error(err);
       $("status").textContent = "Okuma sırasında hata oluştu: " + (err.message || err);
@@ -639,7 +668,14 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     pv.src = URL.createObjectURL(f);
     pv.style.display = "block";
     const key = getKey();
-    key ? runClaude(f, key) : runOcr(f);
+    if (key) runClaude(f, key);
+    else {
+      $("aiBox").open = true;
+      $("aiBox").scrollIntoView({ behavior: "smooth", block: "center" });
+      $("status").innerHTML = "El yazısı listeyi okumak için <b>Claude API anahtarı</b> gerekli. Anahtarı yukarıya girip fotoğrafı tekrar seç. "
+        + "<button type=\"button\" class=\"ghost\" id=\"tryOcr\">Yine de basit okumayla dene</button>";
+      $("tryOcr").onclick = () => runOcr(f);
+    }
     e.target.value = "";   // aynı fotoğraf tekrar seçilebilsin
   };
   $("apiKey").value = getKey();
@@ -666,7 +702,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     refresh();
   };
 
-  const go = (y, m) => { view = { y, m }; save(); render(); };
+  const go = (y, m) => { draft = false; view = { y, m }; save(); render(); };
   $("defMonth").onchange = () => go(view.y, +$("defMonth").value);
   $("defYear").onchange = () => go(+$("defYear").value || view.y, view.m);
   $("prev").onclick = () => go(view.m ? view.y : view.y - 1, (view.m + 11) % 12);

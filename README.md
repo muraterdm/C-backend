@@ -44,4 +44,9 @@ ARALIK 2026
 Başka biçimler de tanınır: `05.11.2026`, `12 Kasım`, `Tuba 3 7 12` (varsayılan ayın günleri).
 
 İsim eşleşmesi büyük/küçük harf ve Türkçe karakter farkına duyarsızdır (`TUBA`, `tuba`, `Gulcan` = `Gülcan`) ve tam kelime arar
-(`Tuba` → `Tuba Kaya` eşleşir; `Tuğba`, `Tubanur` eşleşmez). Takvimde bir güne dokunarak yapılan elle düzeltmeler sadece o isim için saklanır.
+(`Tuba` → `Tuba Kaya` eşleşir, `Tubanur` eşleşmez). El yazısı okuma hatalarına karşı 4+ harfli isimlerde tek harf farkı kabul edilir
+(`Tubo`, `Tuha` → `Tuba`); ancak listede ayrı bir kişi olarak düzenli geçen isimler (ör. hem `Tuba` hem `Tuğba` varsa) karıştırılmaz.
+Takvimde bir güne dokunarak yapılan elle düzeltmeler sadece o isim için saklanır.
+
+API anahtarı yokken fotoğraf yüklenirse uygulama anahtar ister; "Yine de basit okumayla dene" seçilirse sonuç sadece taslak olarak gösterilir,
+"Kaydet ve tara"ya basılmadıkça kayıtlı listenin üzerine yazılmaz.
