@@ -15,6 +15,8 @@ Nöbet listesinin fotoğrafından seçilen kişinin (varsayılan: **Tuba**) nöb
 - `05.11.2026`, `5/11/26`, `05-11` (yıl yoksa "Varsayılan yıl" kullanılır)
 - `12 Kasım`, `12 Kasım 2026`
 - Sadece gün numaraları: `Tuba 3 7 12 18` veya `5 Perşembe Tuba` → "Varsayılan ay/yıl"ın günleri
+- Satır başında gün + `|` ile ayrılmış ameliyathane sütunu: `4 Hatice - Nahide | Tuba` → nöbet ve ameliyathane ayrı renkte işaretlenir
 
 İsim eşleşmesi büyük/küçük harf duyarsızdır (`TUBA`, `Tuba`); `Tuğba` gibi farklı isimler eşleşmez.
+El yazısı listeler OCR ile güvenilir okunamaz; Kasım 2026 listesi elle dökülüp uygulamaya gömülüdür ("Kasım 2026 listesini yükle").
 Veriler yalnızca tarayıcının yerel deposunda saklanır.

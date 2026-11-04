@@ -8,11 +8,13 @@
   :root {
     --bg: #f6f7fb; --card: #ffffff; --text: #1d2330; --muted: #6b7280;
     --border: #e3e6ee; --accent: #c2185b; --accent-soft: #fde4ee; --today: #2563eb;
+    --surg: #0d9488; --surg-soft: #ccfbf1;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #12141a; --card: #1b1e27; --text: #e8eaf0; --muted: #9aa1b2;
       --border: #2c3040; --accent: #f06292; --accent-soft: #4a1f31; --today: #60a5fa;
+      --surg: #2dd4bf; --surg-soft: #134e4a;
     }
   }
   * { box-sizing: border-box; }
@@ -51,6 +53,11 @@
   .day.today { border-color: var(--today); border-width: 2px; }
   .day.duty { background: var(--accent); border-color: var(--accent); color: #fff; }
   .day.duty .num { color: #fff; }
+  .day.surgery { background: var(--surg-soft); border-color: var(--surg); }
+  .day.surgery .num { color: var(--text); }
+  .day.duty.surgery { background: linear-gradient(135deg, var(--accent) 50%, var(--surg) 50%); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .85rem; color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
   .day .tag { font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .summary { margin-top: 12px; font-size: .9rem; color: var(--muted); }
   @media (max-width: 520px) {
@@ -92,20 +99,27 @@
       <button class="ghost" id="next" aria-label="Sonraki ay">›</button>
     </div>
     <div class="grid" id="grid"></div>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>Nöbet</span>
+      <span><i style="background:var(--surg-soft);border:1px solid var(--surg)"></i>Ameliyathane</span>
+      <span><i style="background:linear-gradient(135deg,var(--accent) 50%,var(--surg) 50%)"></i>İkisi birden</span>
+    </div>
     <div class="summary" id="summary"></div>
     <div class="row" style="margin-top:12px">
       <button id="ics">Takvime aktar (.ics)</button>
       <button class="ghost" id="clear">İşaretleri temizle</button>
     </div>
-    <p class="status">İpucu: Bir güne tıklayarak nöbet işaretini elle ekleyip kaldırabilirsin.</p>
+    <p class="status">İpucu: Bir güne tıklayarak işareti değiştirebilirsin (boş → nöbet → ameliyathane → ikisi → boş).</p>
   </section>
 
   <section class="card">
     <strong>Okunan metin</strong>
-    <p class="status" style="margin-top:0">Okuma hatalıysa metni burada düzeltip yeniden tarayabilirsin.</p>
+    <p class="status" style="margin-top:0">Okuma hatalıysa metni burada düzeltip yeniden tarayabilirsin. El yazısı listeler otomatik okunamayabilir; o durumda listeyi bu biçimde yaz:
+      <code>gün İsim - İsim | Ameliyathane</code> (ör. <code>4 Hatice - Nahide | Tuba</code>).</p>
     <textarea id="ocrText" placeholder="Fotoğraftan okunan metin burada görünür…"></textarea>
     <div class="row" style="margin-top:8px">
       <button id="reparse">Metni yeniden tara</button>
+      <button class="ghost" id="sample">Kasım 2026 listesini yükle</button>
     </div>
     <ul class="matches" id="matches"></ul>
   </section>
@@ -117,18 +131,52 @@
   const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
   const MONTH_KEYS = ["oca","şub","mar","nis","may","haz","tem","ağu","eyl","eki","kas","ara"];
   const DOW = ["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
-  const STORE_KEY = "nobet-takvimi-v1";
+  const STORE_KEY = "nobet-takvimi-v2";
+  // Duvardaki "KASIM AYI 168 saat" listesinin (el yazısı) dökümü.
+  // Sol: günün nöbetçileri, "|" sonrası: Ameliyathane ("-" = boş).
+  const SAMPLE = `KASIM AYI 168 saat
+1 Tuba - Rojda | -
+2 Gülcan - Nahide | Nahide
+3 Rojda - Tuba | Hatice
+4 Hatice - Nahide | Tuba
+5 Ceren - Gülcan | Gülcan
+6 Rojda - Hatice | Rojda
+7 Kadriye - Selin | -
+8 Ceren - Nahide | -
+9 Hatice - Tuba | Hatice
+10 Nahide - Gülcan | Nahide
+11 Hatice - Ceren | Ceren
+12 Tuba - Gülcan | Gülcan
+13 Fatma - Nahide | Nahide
+14 Selma - Hatice | -
+15 Rojda - Ceren | -
+16 Gülcan - Tuba | Tuba
+17 Hatice - Selma | Selma
+18 Ceren - Tuba | Ceren
+19 Selma - Gülcan | Gülcan
+20 Rojda - Hatice | Hatice
+21 Tuba - Ceren | -
+22 Rojda - Gülcan | -
+23 Nahide - Selma | Selma
+24 Tuba - Ceren | Ceren
+25 Gülcan - Rojda | Rojda
+26 Selma - Nahide | Selma
+27 Tuba - Ceren | Tuba
+28 Kadriye - Selin | -
+29 Rojda - Gülcan | -
+30 Nahide - Ceren | Nahide`;
+  const SAMPLE_VIEW = { y: 2026, m: 10 };
   const $ = id => document.getElementById(id);
 
   const today = new Date();
   let view = { y: today.getFullYear(), m: today.getMonth() };
-  let duties = new Set();          // "YYYY-MM-DD"
+  let duties = new Map();          // "YYYY-MM-DD" -> { n: nöbet, a: ameliyathane }
 
   // ---------- persistence ----------
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-      if (Array.isArray(s.duties)) duties = new Set(s.duties);
+      if (s.duties && typeof s.duties === "object") duties = new Map(Object.entries(s.duties));
       if (s.name) $("name").value = s.name;
       if (s.text) $("ocrText").value = s.text;
       if (s.view) view = s.view;
@@ -137,7 +185,7 @@
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        duties: [...duties], name: $("name").value, text: $("ocrText").value, view
+        duties: Object.fromEntries(duties), name: $("name").value, text: $("ocrText").value, view
       }));
     } catch (_) {}
   }
@@ -215,33 +263,46 @@
     if (!name || !text.trim()) { render(); return; }
 
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const newDates = new Set();
+    const next = new Map();
+    const mark = (d, k) => { const v = next.get(d) || {}; v[k] = true; next.set(d, v); };
     let hit = 0;
     for (const line of lines) {
       if (!lineHasName(line, name)) continue;
       hit++;
-      const ds = datesFromLine(line, defY, defM);
-      ds.forEach(d => newDates.add(d));
+      // "gün İsim - İsim | Ameliyathane": "|" sonrası ameliyathane sütunu
+      const [main, surg = ""] = line.split("|");
+      const lead = main.match(/^\s*\(?(\d{1,2})\)?(?!\s*[./\-]\s*\d)/);
+      const leadDate = lead && validDate(defY, defM, +lead[1]) ? [iso(defY, defM, +lead[1])] : null;
+      const parts = [];
+      if (lineHasName(main, name)) {
+        const ds = leadDate || datesFromLine(main, defY, defM);
+        ds.forEach(d => mark(d, "n"));
+        parts.push(ds.length ? `nöbet <mark>${ds.map(fmt).join(", ")}</mark>` : "nöbet: <em>tarih bulunamadı</em>");
+      }
+      if (lineHasName(surg, name)) {
+        const ds = leadDate || datesFromLine(surg, defY, defM);
+        ds.forEach(d => mark(d, "a"));
+        parts.push(ds.length ? `ameliyathane <mark>${ds.map(fmt).join(", ")}</mark>` : "ameliyathane: <em>tarih bulunamadı</em>");
+      }
       const li = document.createElement("li");
       const esc = line.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-      li.innerHTML = esc + (ds.length
-        ? ` → <mark>${ds.map(fmt).join(", ")}</mark>`
-        : " → <em>tarih bulunamadı</em>");
+      li.innerHTML = esc + " → " + parts.join("; ");
       list.appendChild(li);
     }
 
-    duties = newDates;
+    duties = next;
     if (duties.size) {
-      const first = [...duties].sort()[0];
+      const first = [...duties.keys()].sort()[0];
       view = { y: +first.slice(0, 4), m: +first.slice(5, 7) - 1 };
     }
     $("status").textContent = hit
-      ? `"${name}" geçen ${hit} satır bulundu, ${duties.size} nöbet günü işaretlendi.`
+      ? `"${name}" geçen ${hit} satır bulundu: ${count("n")} nöbet, ${count("a")} ameliyathane günü işaretlendi.`
       : `Metinde "${name}" geçen satır bulunamadı. İsmi ya da okunan metni kontrol et.`;
     save();
     render();
   }
 
+  const count = (k, prefix = "") => [...duties].filter(([d, v]) => v[k] && d.startsWith(prefix)).length;
   const fmt = s => { const [y, m, d] = s.split("-"); return `${+d} ${MONTHS[+m - 1]}`; };
 
   // ---------- calendar ----------
@@ -260,19 +321,29 @@
       const key = iso(y, m, d);
       const e = document.createElement("div");
       const wd = (offset + d - 1) % 7;
+      const v = duties.get(key) || {};
+      const label = [v.n && "Nöbet", v.a && "Ameliyathane"].filter(Boolean).join(" + ");
       e.className = "day" + (wd >= 5 ? " weekend" : "")
-        + (duties.has(key) ? " duty" : "")
+        + (v.n ? " duty" : "") + (v.a ? " surgery" : "")
         + (key === iso(today.getFullYear(), today.getMonth(), today.getDate()) ? " today" : "");
-      e.innerHTML = `<span class="num">${d}</span>${duties.has(key) ? `<span class="tag">${name} nöbet</span>` : ""}`;
-      e.title = duties.has(key) ? `${name} nöbetçi` : "Tıklayarak nöbet ekle";
-      e.onclick = () => { duties.has(key) ? duties.delete(key) : duties.add(key); save(); render(); };
+      e.innerHTML = `<span class="num">${d}</span>${label ? `<span class="tag">${label}</span>` : ""}`;
+      e.title = label ? `${name}: ${label}` : "Tıklayarak nöbet ekle";
+      e.onclick = () => {
+        // boş → nöbet → ameliyathane → ikisi → boş
+        const state = (v.n ? 1 : 0) + (v.a ? 2 : 0);
+        const order = [0, 1, 2, 3], nextState = order[(order.indexOf(state) + 1) % 4];
+        if (!nextState) duties.delete(key);
+        else duties.set(key, { n: !!(nextState & 1), a: !!(nextState & 2) });
+        save(); render();
+      };
       grid.appendChild(e);
     }
 
-    const inMonth = [...duties].filter(k => k.startsWith(`${y}-${pad(m + 1)}`)).sort();
-    const all = [...duties].sort();
-    $("summary").textContent = all.length
-      ? `Bu ay ${inMonth.length} nöbet${inMonth.length ? ": " + inMonth.map(k => +k.slice(8)).join(", ") : ""}. Toplam ${all.length} nöbet günü.`
+    const prefix = `${y}-${pad(m + 1)}`;
+    const days = k => [...duties].filter(([d, v]) => v[k] && d.startsWith(prefix)).map(([d]) => +d.slice(8)).sort((a, b) => a - b);
+    const n = days("n"), a = days("a");
+    $("summary").textContent = duties.size
+      ? `Bu ay ${n.length} nöbet${n.length ? " (" + n.join(", ") + ")" : ""}, ${a.length} ameliyathane${a.length ? " (" + a.join(", ") + ")" : ""}.`
       : "Henüz işaretli nöbet yok.";
   }
 
@@ -326,15 +397,15 @@
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
     const next = k => { const d = new Date(k + "T00:00:00"); d.setDate(d.getDate() + 1);
                         return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
-    const events = [...duties].sort().map(k => [
+    const events = [...duties].sort().flatMap(([k, v]) => [v.n && "Nöbet", v.a && "Ameliyathane"].filter(Boolean).map(kind => [
       "BEGIN:VEVENT",
-      `UID:${k}-${encodeURIComponent(name)}@nobet-takvimi`,
+      `UID:${k}-${kind === "Nöbet" ? "n" : "a"}-${encodeURIComponent(name)}@nobet-takvimi`,
       `DTSTAMP:${stamp}`,
       `DTSTART;VALUE=DATE:${k.replace(/-/g, "")}`,
       `DTEND;VALUE=DATE:${next(k)}`,
-      `SUMMARY:${name} - Nöbet`,
+      `SUMMARY:${name} - ${kind}`,
       "END:VEVENT"
-    ].join("\r\n"));
+    ].join("\r\n")));
     const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nobet Takvimi//TR", ...events, "END:VCALENDAR"].join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
@@ -358,6 +429,11 @@
     runOcr(f);
   };
   $("reparse").onclick = parse;
+  $("sample").onclick = () => {
+    $("ocrText").value = SAMPLE;
+    $("defMonth").value = SAMPLE_VIEW.m; $("defYear").value = SAMPLE_VIEW.y;
+    parse();
+  };
   $("name").onchange = parse;
   $("defMonth").onchange = parse;
   $("defYear").onchange = parse;
@@ -366,7 +442,8 @@
   $("clear").onclick = () => { if (confirm("Tüm nöbet işaretleri silinsin mi?")) { duties.clear(); save(); render(); } };
   $("ics").onclick = exportIcs;
 
-  render();
+  // İlk açılışta Kasım 2026 listesini hazır getir
+  if (!$("ocrText").value.trim()) $("sample").onclick(); else render();
 
   // Test için dışarı aç
   window.__nobet = { datesFromLine, lineHasName };
