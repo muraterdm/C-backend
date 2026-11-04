@@ -52,3 +52,8 @@ Başka biçimler de tanınır: `05.11.2026`, `12 Kasım`, `Tuba 3 7 12` (varsay�
 (`Tubo`, `Tuha` → `Tuba`); ancak listede ayrı bir kişi olarak düzenli geçen isimler (ör. hem `Tuba` hem `Tuğba` varsa) karıştırılmaz.
 Takvimde bir güne dokunarak yapılan elle düzeltmeler sadece o isim için saklanır.
 
+Fotoğraf okunurken yapay zekâya ekipteki bilinen isimler verilir ve okunan her isim ekipteki en yakın isme bağlanır
+(ör. `Pubo`, `Rubo`, `Tubo` → `Tuba`). Ekip listesi yeni listelerde geçen isimlerle kendiliğinden genişler.
+Kağıtta kişi başı özet tablosu varsa (`Tubo: 9`) metne `# Özet: Tuba 9, …` satırı olarak eklenir; takvimde bulunan
+nöbet sayısı bununla tutmazsa uygulama uyarır.
+

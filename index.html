@@ -201,10 +201,13 @@
 29 Rojda - Gülcan | -
 30 Nahide - Ceren | Nahide`;
   const SAMPLE_VIEW = { y: 2026, m: 10 };
+  // Ekipteki bilinen isimler: okunan isimler bunlara eşleştirilir (yeni listelerle genişler)
+  const TEAM_SEED = ["Ceren", "Fatma", "Gülcan", "Hatice", "Kadriye", "Nahide", "Rojda", "Selin", "Selma", "Tuba"];
   const $ = id => document.getElementById(id);
 
   const today = new Date();
   let view = { y: today.getFullYear(), m: today.getMonth() };
+  let team = [...TEAM_SEED];
   let rosters = {};          // "YYYY-MM" -> o ayın liste metni (herkes için ortak)
   let overrides = {};        // isim (katlanmış) -> { "YYYY-MM-DD": {n,a} | null }  elle yapılan düzeltmeler
   let duties = new Map();    // seçili isim için hesaplanan: "YYYY-MM-DD" -> { n: nöbet, a: ameliyathane }
@@ -215,6 +218,7 @@
     try { s = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (_) {}
     if (s) {
       rosters = s.rosters || {};
+      if (Array.isArray(s.team) && s.team.length) team = s.team;
       overrides = s.overrides || {};
       $("name").value = s.name || "";
       if (s.view) view = s.view;
@@ -227,7 +231,7 @@
   }
   function save() {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ rosters, overrides, name: $("name").value.trim(), view }));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ rosters, team, overrides, name: $("name").value.trim(), view }));
     } catch (_) {}
   }
 
@@ -315,6 +319,30 @@
     return diff + (a.length - i) + (b.length - j) <= 1;
   }
 
+  // Levenshtein (harf ekleme/silme/değiştirme sayısı)
+  function editDistance(a, b) {
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++)
+      for (let j = 1; j <= b.length; j++)
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length];
+  }
+
+  // Okunan ismi ekipteki en yakın isme bağla ("Pubo", "Tubo" → "Tuba"); emin değilse olduğu gibi bırak
+  function snapName(raw) {
+    const clean = String(raw).replace(/[^A-Za-zÇĞİÖŞÜçğıöşü\s]/g, " ").replace(/\s+/g, " ").trim();
+    if (!clean) return clean;
+    const f = fold(clean);
+    let best = null, bestD = Infinity, tie = false;
+    for (const t of team) {
+      const dd = editDistance(f, fold(t));
+      if (dd < bestD) { best = t; bestD = dd; tie = false; } else if (dd === bestD) tie = true;
+    }
+    const limit = f.length >= 3 ? 2 : 0;
+    return best && !tie && bestD <= limit ? best : clean.split(" ").map(w => w[0].toLocaleUpperCase("tr-TR") + w.slice(1)).join(" ");
+  }
+
   // Listede başka bir kişi olarak düzenli geçen isimler (ör. hem Tuba hem Tuğba varsa karıştırma)
   let knownNames = new Set();
   let draft = false;   // metin kutusunda henüz kaydedilmemiş okuma var
@@ -344,7 +372,7 @@
     const mark = (d, k) => { const v = marks.get(d) || {}; v[k] = true; marks.set(d, v); };
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.trim();
-      if (!line || !lineHasName(line, name)) continue;
+      if (!line || line.startsWith("#") || !lineHasName(line, name)) continue;
       // "gün İsim - İsim | Ameliyathane": "|" sonrası ameliyathane sütunu
       const [main, surg = ""] = line.split("|");
       const lead = main.match(/^\s*\(?(\d{1,2})\)?(?!\s*[./\-]\s*\d)/);
@@ -367,7 +395,7 @@
 
   // Seçili isim için tüm ayların listelerinden takvimi hesapla
   function compute() {
-    knownNames = new Set(rosterNames().flatMap(n => fold(n).split(/\s+/)));
+    knownNames = new Set([...team, ...rosterNames()].flatMap(n => fold(n).split(/\s+/)));
     duties = new Map();
     const name = currentName();
     if (!name) return;
@@ -389,6 +417,7 @@
     const count = new Map(), shown = new Map();
     for (const text of Object.values(rosters)) {
       for (const line of text.split(/\r?\n/)) {
+        if (line.trim().startsWith("#")) continue;
         for (let part of line.split(/[|,\-–—\/]+/)) {
           part = part.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü\s]/g, " ").replace(/\s+/g, " ").trim();
           if (part.length < 3 || STOP.has(fold(part)) || part.split(" ").some(w => STOP.has(fold(w)))) continue;
@@ -409,6 +438,7 @@
     if (head) { m = head.m; if (head.y) y = head.y; }
     const key = ymKey(y, m);
     if (text.trim()) rosters[key] = text.trim(); else delete rosters[key];
+    for (const nm of rosterNames()) if (!team.some(t => fold(t) === fold(nm))) team.push(nm);
     view = { y, m };
     refresh();
     const name = currentName();
@@ -421,6 +451,17 @@
         ? `${MONTHS[m]} ${y}: "${name}" için ${v.filter(x => x.n).length} nöbet, ${v.filter(x => x.a).length} ameliyathane günü bulundu.`
         : `${MONTHS[m]} ${y} listesinde "${name}" bulunamadı. İsmi ya da okunan metni kontrol et.`;
     }
+  }
+
+  // Kağıttaki kişi başı toplam ("# Özet: Tuba 9, Rojda 8") – kontrol için
+  function paperTotal(text, name) {
+    const line = (text || "").split(/\r?\n/).find(l => /^#\s*özet/i.test(l.trim()));
+    if (!line) return null;
+    for (const item of line.replace(/^#\s*özet\s*:?/i, "").split(",")) {
+      const m = item.trim().match(/^(.*?)\s+(\d+)$/);
+      if (m && fold(snapName(m[1])) === fold(snapName(name))) return +m[2];
+    }
+    return null;
   }
 
   function refresh() { compute(); save(); render(); }
@@ -472,6 +513,12 @@
       : (n.length || a.length)
         ? `${name}: bu ay ${n.length} nöbet${n.length ? " (" + n.join(", ") + ")" : ""}, ${a.length} ameliyathane${a.length ? " (" + a.join(", ") + ")" : ""}.`
         : hasRoster ? `${name} bu ayın listesinde yok.` : "Bu ay için liste yok. Listenin fotoğrafını yükle.";
+    const expected = name && hasRoster ? paperTotal(rosters[prefix], name) : null;
+    if (expected != null) {
+      $("summary").textContent += expected === n.length
+        ? ` ✓ Kağıttaki özetle tutuyor (${expected}).`
+        : ` ⚠ Kağıttaki özete göre ${expected} nöbet olmalı; eksik/fazla günleri aşağıdaki metinden düzelt ya da takvimde güne dokunarak ekle.`;
+    }
 
     // Bu ayın metni ve eşleşen satırlar
     if (document.activeElement !== $("ocrText") && !draft) $("ocrText").value = rosters[prefix] || "";
@@ -563,9 +610,19 @@
           required: ["day", "nobet", "ameliyathane"],
           additionalProperties: false
         }
+      },
+      totals: {
+        type: "array",
+        description: "Kağıtta kişi başı nöbet sayısı tablosu varsa her kişi ve yazan sayı; yoksa boş liste",
+        items: {
+          type: "object",
+          properties: { name: { type: "string" }, count: { type: "integer" } },
+          required: ["name", "count"],
+          additionalProperties: false
+        }
       }
     },
-    required: ["month", "year", "days"],
+    required: ["month", "year", "days", "totals"],
     additionalProperties: false
   };
 
@@ -573,8 +630,11 @@
   function rosterToText(roster) {
     const m = Math.min(12, Math.max(1, roster.month)) - 1;
     const lines = [`${MONTHS[m].toLocaleUpperCase("tr-TR")} ${roster.year}`];
+    const snap = arr => (arr || []).map(snapName).filter(Boolean);
+    const totals = (roster.totals || []).filter(t => t && t.name && Number.isFinite(t.count));
+    if (totals.length) lines.push("# Özet: " + totals.map(t => `${snapName(t.name)} ${t.count}`).join(", "));
     roster.days.slice().sort((a, b) => a.day - b.day).forEach(d => {
-      lines.push(`${d.day} ${d.nobet.join(" - ") || "-"} | ${d.ameliyathane.join(", ") || "-"}`);
+      lines.push(`${d.day} ${snap(d.nobet).join(" - ") || "-"} | ${snap(d.ameliyathane).join(", ") || "-"}`);
     });
     return { m, y: roster.year, text: lines.join("\n") };
   }
@@ -587,7 +647,11 @@ Listedeki her günü oku:
 - nobet: o günün ana nöbet sütunundaki isimler (genelde "İsim - İsim" şeklinde iki kişi).
 - ameliyathane: varsa "Ameliyathane" (veya benzeri ikinci) sütunundaki isimler; boş, "—" veya çizgi ise boş liste.
 Kağıdın kenarındaki kişi başı toplam/özet tablolarını gün olarak alma.
-İsimleri listede en sık geçen doğru yazımıyla ve ilk harfi büyük yaz (aynı kişinin farklı okunan yazımlarını listedeki en sık yazımla birleştir).
+Bu ekipte bilinen isimler: ${team.join(", ")}. El yazısında harfler karışabilir (ör. "Tubo", "Pubo" aslında "Tuba" olabilir);
+her ismi mümkünse bu listedeki birine eşleştir ve aynen o yazımla yaz. Listede olmayan yeni biri varsa okuduğun gibi, ilk harfi büyük yaz.
+totals: kağıdın kenarında kişi başı toplam/özet tablosu varsa her kişi için yazan sayıyı ver (yoksa boş liste).
+Bu toplamları kontrol için kullan: her kişinin "nobet" sütununda kaç gün geçtiğini say; özetle tutmuyorsa o kişinin satırlarını fotoğrafta tekrar dikkatle incele ve düzelt.
+Satırların üzerine sonradan çizilmiş renkli çizgileri/işaretleri yok say, alttaki el yazısını oku.
 Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getDate()}.${t.getMonth() + 1}.${t.getFullYear()}) en yakın geçerli yılını seç.`;
   }
 
@@ -596,7 +660,8 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
 
   // ----- Google Gemini (ücretsiz katman) -----
   // Model adları zamanla değiştiği için sırayla dene; bulunamayan modelde bir sonrakine geç
-  const GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"];
+  // Önce el yazısında daha iyi olan Pro; ücretsiz sınırı dolarsa ya da yoksa Flash
+  const GEMINI_MODELS = ["gemini-pro-latest", "gemini-2.5-pro", "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"];
   const GEMINI_SCHEMA = {
     type: "OBJECT",
     properties: {
@@ -614,15 +679,25 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
           required: ["day", "nobet", "ameliyathane"],
           propertyOrdering: ["day", "nobet", "ameliyathane"]
         }
+      },
+      totals: {
+        type: "ARRAY",
+        description: "Kağıtta kişi başı nöbet sayısı tablosu varsa her kişi ve yazan sayı; yoksa boş liste",
+        items: {
+          type: "OBJECT",
+          properties: { name: { type: "STRING" }, count: { type: "INTEGER" } },
+          required: ["name", "count"],
+          propertyOrdering: ["name", "count"]
+        }
       }
     },
-    required: ["month", "year", "days"],
-    propertyOrdering: ["month", "year", "days"]
+    required: ["month", "year", "days", "totals"],
+    propertyOrdering: ["month", "year", "totals", "days"]
   };
 
   async function runGemini(file, key) {
     $("progressWrap").style.display = "none";
-    $("status").textContent = "Fotoğraf Gemini ile okunuyor… (yaklaşık 10–40 saniye)";
+    $("status").textContent = "Fotoğraf Gemini ile okunuyor… (yaklaşık 20 saniye – 1,5 dakika)";
     try {
       const data = await toJpegBase64(file);
       const body = JSON.stringify({
@@ -643,6 +718,8 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
         if (res.ok) { out = j; break; }
         const msg = j?.error?.message || res.statusText;
         if (res.status === 404) { lastErr = msg; continue; }               // model yok → sıradakini dene
+        if ((res.status === 429 || res.status === 403) && model !== GEMINI_MODELS[GEMINI_MODELS.length - 1]
+            && !/api key/i.test(msg)) { lastErr = msg; continue; }        // bu modelin ücretsiz sınırı yok/doldu → sıradaki
         if (res.status === 400 && /api key/i.test(msg)) throw new Error("API anahtarı geçersiz. Ayarlardan kontrol et.");
         if (res.status === 403) throw new Error("Anahtarın bu servise izni yok: " + msg);
         if (res.status === 429) throw new Error("Ücretsiz kullanım sınırı doldu. Birkaç dakika (ya da yarın) sonra tekrar dene.");
@@ -828,7 +905,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   }
 
   // Test için dışarı aç
-  window.__nobet = { datesFromLine, lineHasName, rosterToText, rosterNames };
+  window.__nobet = { datesFromLine, lineHasName, rosterToText, rosterNames, snapName };
 })();
 </script>
 </body>
