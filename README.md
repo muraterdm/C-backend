@@ -20,7 +20,7 @@ Uygulama bir PWA'dır: telefona yüklenince ana ekranda simgesiyle açılır, ta
 3. "Okunan metin" kutusunda sonucu kontrol et; hata varsa düzeltip **Metni yeniden tara**'ya bas.
 4. Her ayın listesi bir kez kaydedilir ve herkes için ortaktır: isim değiştirince aynı listelerden o kişinin günleri anında gösterilir.
    Ay okları ile geçmiş aylara bakabilirsin.
-5. **Takvime aktar (.ics)** ile telefon takvimine ekleyebilirsin.
+5. **Takvime ekle** ile açık olan ayın nöbetlerini telefon takvimine ekle: iPhone'da "iPhone Takvimi'ne ekle" → **Tümünü Ekle**; Android'de "Dosyayı paylaş" → Takvim; ya da Google Takvim bağlantılarıyla tek tek.
 
 ## İlk kurulum (her telefonda bir kez): ücretsiz API anahtarı
 

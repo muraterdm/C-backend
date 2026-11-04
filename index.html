@@ -30,6 +30,8 @@
          font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   main { max-width: 960px; margin: 0 auto; padding: 16px;
          padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .export { margin-top: 12px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; }
+  .export a { color: var(--accent); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .chip { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; font-size: .9rem; }
   .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -141,8 +143,20 @@
     </div>
     <div class="summary" id="summary"></div>
     <div class="row" style="margin-top:12px">
-      <button id="ics">Takvime aktar (.ics)</button>
+      <button id="ics">Takvime ekle</button>
       <button class="ghost" id="clear">Bu ayın listesini sil</button>
+    </div>
+    <div id="exportPanel" class="export" hidden>
+      <p id="exportTitle" class="status" style="margin-top:0"></p>
+      <div class="row">
+        <button type="button" id="expApple">iPhone Takvimi'ne ekle</button>
+        <button type="button" id="expShare" class="ghost">Dosyayı paylaş / kaydet</button>
+      </div>
+      <p class="status" id="expHint"></p>
+      <details>
+        <summary>Google Takvim'e tek tek ekle</summary>
+        <ul class="matches" id="expGoogle"></ul>
+      </details>
     </div>
     <p class="status">İpucu: Bir güne dokunarak seçili kişinin işaretini değiştirebilirsin (boş → nöbet → ameliyathane → ikisi → boş).</p>
   </section>
@@ -786,28 +800,89 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   }
 
   // ---------- .ics export ----------
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const ymd = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  const nextDay = k => { const d = new Date(k + "T00:00:00"); d.setDate(d.getDate() + 1); return ymd(d); };
+
+  // Takvimde açık olan ayın etkinlikleri (seçili kişi için)
+  function monthEvents() {
+    const prefix = ymKey(view.y, view.m), name = currentName();
+    return [...duties].filter(([k]) => k.startsWith(prefix)).sort()
+      .flatMap(([k, v]) => [v.n && "Nöbet", v.a && "Ameliyathane"].filter(Boolean)
+        .map(kind => ({ date: k, kind, title: `${name} - ${kind}` })));
+  }
+
+  function buildIcs(events) {
+    const name = currentName();
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+    const body = events.map(e => [
+      "BEGIN:VEVENT",
+      `UID:${e.date}-${e.kind === "Nöbet" ? "n" : "a"}-${encodeURIComponent(fold(name))}@nobet-takvimi`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${e.date.replace(/-/g, "")}`,
+      `DTEND;VALUE=DATE:${nextDay(e.date)}`,
+      `SUMMARY:${e.title}`,
+      "TRANSP:TRANSPARENT",
+      "END:VEVENT"
+    ].join("\r\n"));
+    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nobet Takvimi//TR", "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH", `X-WR-CALNAME:${name} nöbetleri`, ...body, "END:VCALENDAR"].join("\r\n") + "\r\n";
+  }
+
   function exportIcs() {
     const name = currentName();
+    const panel = $("exportPanel");
+    if (!panel.hidden) { panel.hidden = true; return; }
     if (!name) { alert("Önce ismini yaz ya da seç."); return; }
-    if (!duties.size) { alert(`${name} için dışa aktarılacak nöbet yok.`); return; }
-    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
-    const next = k => { const d = new Date(k + "T00:00:00"); d.setDate(d.getDate() + 1);
-                        return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
-    const events = [...duties].sort().flatMap(([k, v]) => [v.n && "Nöbet", v.a && "Ameliyathane"].filter(Boolean).map(kind => [
-      "BEGIN:VEVENT",
-      `UID:${k}-${kind === "Nöbet" ? "n" : "a"}-${encodeURIComponent(name)}@nobet-takvimi`,
-      `DTSTAMP:${stamp}`,
-      `DTSTART;VALUE=DATE:${k.replace(/-/g, "")}`,
-      `DTEND;VALUE=DATE:${next(k)}`,
-      `SUMMARY:${name} - ${kind}`,
-      "END:VEVENT"
-    ].join("\r\n")));
-    const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nobet Takvimi//TR", ...events, "END:VCALENDAR"].join("\r\n");
+    const events = monthEvents();
+    if (!events.length) { alert(`${MONTHS[view.m]} ${view.y} ayında ${name} için nöbet yok.`); return; }
+    $("exportTitle").textContent = `${name} – ${MONTHS[view.m]} ${view.y}: ${events.length} etkinlik eklenecek (tüm gün).`;
+    $("expApple").hidden = !isIOS;
+    $("expHint").innerHTML = isIOS
+      ? (isStandalone()
+          ? "“iPhone Takvimi'ne ekle”ye dokununca açılan ekranda <b>Tümünü Ekle</b>'ye bas. Hiçbir şey olmazsa uygulamayı Safari'de açıp orada dene."
+          : "Açılan ekranda <b>Tümünü Ekle</b>'ye bas ve takvimi seç.")
+      : "“Dosyayı paylaş / kaydet” ile Takvim uygulamasını seç ya da indirilen dosyayı aç; açılmazsa aşağıdaki Google Takvim bağlantılarını kullan.";
+    $("expGoogle").innerHTML = events.map(e => {
+      const u = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+        + "&text=" + encodeURIComponent(e.title)
+        + "&dates=" + e.date.replace(/-/g, "") + "/" + nextDay(e.date)
+        + "&details=" + encodeURIComponent("Nöbet Takvimi");
+      return `<li><a href="${u}" target="_blank" rel="noopener">${fmt(e.date)} – ${esc(e.kind)}</a></li>`;
+    }).join("");
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // iPhone: takvim dosyasını doğrudan aç → iOS "Tümünü Ekle" ekranı
+  function exportApple() {
+    const url = "data:text/calendar;charset=utf-8," + encodeURIComponent(buildIcs(monthEvents()));
+    if (isStandalone()) { if (!window.open(url, "_blank")) location.href = url; }
+    else location.href = url;
+  }
+
+  // Paylaşım menüsü (Takvim / Dosyalar / WhatsApp…) ya da indirme
+  async function exportShare() {
+    const name = currentName();
+    const fileName = `${fold(name).replace(/\s+/g, "-")}-${ymKey(view.y, view.m)}-nobet.ics`;
+    const file = new File([buildIcs(monthEvents())], fileName, { type: "text/calendar" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `${name} nöbetleri` });
+        return;
+      }
+    } catch (err) {
+      if (err && err.name === "AbortError") return;     // kullanıcı vazgeçti
+    }
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-    a.download = `${fold(name).replace(/\s+/g, "-")}-nobetler.ics`;
+    a.href = URL.createObjectURL(file);
+    a.download = fileName;
+    document.body.appendChild(a);
     a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
 
   // ---------- wiring ----------
@@ -858,7 +933,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     refresh();
   };
 
-  const go = (y, m) => { draft = false; view = { y, m }; save(); render(); };
+  const go = (y, m) => { $("exportPanel").hidden = true; draft = false; view = { y, m }; save(); render(); };
   $("defMonth").onchange = () => go(view.y, +$("defMonth").value);
   $("defYear").onchange = () => go(+$("defYear").value || view.y, view.m);
   $("prev").onclick = () => go(view.m ? view.y : view.y - 1, (view.m + 11) % 12);
@@ -869,6 +944,8 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     if (confirm(`${MONTHS[view.m]} ${view.y} listesi silinsin mi?`)) { delete rosters[k]; refresh(); }
   };
   $("ics").onclick = exportIcs;
+  $("expApple").onclick = exportApple;
+  $("expShare").onclick = exportShare;
 
   refresh();
 
@@ -905,7 +982,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   }
 
   // Test için dışarı aç
-  window.__nobet = { datesFromLine, lineHasName, rosterToText, rosterNames, snapName };
+  window.__nobet = { datesFromLine, lineHasName, rosterToText, rosterNames, snapName, buildIcs, monthEvents };
 })();
 </script>
 </body>
