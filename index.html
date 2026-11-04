@@ -842,7 +842,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     $("expApple").hidden = !isIOS;
     $("expHint").innerHTML = isIOS
       ? (isStandalone()
-          ? "“iPhone Takvimi'ne ekle”ye dokununca açılan ekranda <b>Tümünü Ekle</b>'ye bas. Hiçbir şey olmazsa uygulamayı Safari'de açıp orada dene."
+          ? "Açılan ekranda <b>Tümünü Ekle</b>'ye bas. Ekran boş kalırsa uygulamayı kapatıp aynı adresi <b>Safari</b>'de aç ve orada dene."
           : "Açılan ekranda <b>Tümünü Ekle</b>'ye bas ve takvimi seç.")
       : "“Dosyayı paylaş / kaydet” ile Takvim uygulamasını seç ya da indirilen dosyayı aç; açılmazsa aşağıdaki Google Takvim bağlantılarını kullan.";
     $("expGoogle").innerHTML = events.map(e => {
@@ -856,11 +856,19 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  // iPhone: takvim dosyasını doğrudan aç → iOS "Tümünü Ekle" ekranı
+  // iPhone: takvim dosyasını uygulamanın kendi adresinden aç (service worker sunar) → iOS "Tümünü Ekle" ekranı
   function exportApple() {
-    const url = "data:text/calendar;charset=utf-8," + encodeURIComponent(buildIcs(monthEvents()));
-    if (isStandalone()) { if (!window.open(url, "_blank")) location.href = url; }
-    else location.href = url;
+    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+      $("expHint").innerHTML = "Bu yöntem için uygulamayı internete bağlıyken bir kez kapatıp yeniden aç; "
+        + "olmazsa “Dosyayı paylaş / kaydet”i ya da Google Takvim bağlantılarını kullan.";
+      return;
+    }
+    const bytes = new TextEncoder().encode(buildIcs(monthEvents()));
+    let bin = "";
+    bytes.forEach(b => bin += String.fromCharCode(b));
+    const d = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const n = `${fold(currentName()).replace(/[^a-z0-9]+/g, "-")}-${ymKey(view.y, view.m)}`;
+    location.href = `takvim.ics?n=${encodeURIComponent(n)}&d=${d}`;
   }
 
   // Paylaşım menüsü (Takvim / Dosyalar / WhatsApp…) ya da indirme
