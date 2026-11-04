@@ -30,6 +30,9 @@
          font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   main { max-width: 960px; margin: 0 auto; padding: 16px;
          padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; font-size: .9rem; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .install { display: none; align-items: center; gap: 10px; justify-content: space-between; }
   .install.show { display: flex; }
   h1 { font-size: 1.5rem; margin: 8px 0 4px; }
@@ -81,7 +84,7 @@
 <body>
 <main>
   <h1>Nöbet Takvimi</h1>
-  <p class="sub">Her ay yeni nöbet listesinin fotoğrafını yükle. Uygulama yazıları okur, seçtiğin ismin geçtiği satırları bulur ve o nöbet günlerini takvimde işaretler.</p>
+  <p class="sub">Her ay yeni nöbet listesinin fotoğrafını yükle, ismini yaz ya da seç: o kişinin nöbet günleri takvimde işaretlenir.</p>
 
   <section class="card install" id="installCard">
     <span id="installText">Bu uygulamayı telefonuna yükle: ana ekranda simgesiyle açılır, internetsiz de çalışır.</span>
@@ -93,16 +96,17 @@
       <label>Fotoğraf
         <input type="file" id="file" accept="image/*">
       </label>
-      <label>Aranan isim
-        <input type="text" id="name" value="Tuba" size="12">
+      <label>İsim
+        <input type="text" id="name" placeholder="ör. Tuba" size="14" autocomplete="off">
       </label>
-      <label>Varsayılan ay
+      <label>Liste ayı
         <select id="defMonth"></select>
       </label>
-      <label>Varsayılan yıl
+      <label>Yıl
         <input type="number" id="defYear" min="2000" max="2100" style="width:6rem">
       </label>
     </div>
+    <div class="chips" id="nameChips" aria-label="Listedeki isimler"></div>
     <details id="aiBox" style="margin-top:12px">
       <summary>El yazısı okuma ayarı (Claude API anahtarı)</summary>
       <p class="status" style="margin-top:6px">El yazısı listeleri doğru okumak için fotoğraf Claude'a gönderilir. Anahtarı
@@ -136,19 +140,19 @@
     <div class="summary" id="summary"></div>
     <div class="row" style="margin-top:12px">
       <button id="ics">Takvime aktar (.ics)</button>
-      <button class="ghost" id="clear">İşaretleri temizle</button>
+      <button class="ghost" id="clear">Bu ayın listesini sil</button>
     </div>
-    <p class="status">İpucu: Bir güne tıklayarak işareti değiştirebilirsin (boş → nöbet → ameliyathane → ikisi → boş).</p>
+    <p class="status">İpucu: Bir güne dokunarak seçili kişinin işaretini değiştirebilirsin (boş → nöbet → ameliyathane → ikisi → boş).</p>
   </section>
 
   <section class="card">
     <strong>Okunan metin</strong>
     <p class="status" style="margin-top:0">Okuma hatalıysa metni burada düzeltip yeniden tarayabilirsin. El yazısı listeler otomatik okunamayabilir; o durumda listeyi bu biçimde yaz:
-      <code>gün İsim - İsim | Ameliyathane</code> (ör. <code>4 Hatice - Nahide | Tuba</code>).</p>
+      <code>gün İsim - İsim | Ameliyathane</code> (ör. <code>4 Hatice - Nahide | Tuba</code>). Metin, takvimde açık olan ayın listesidir ve herkes için ortaktır.</p>
     <textarea id="ocrText" placeholder="Fotoğraftan okunan metin burada görünür…"></textarea>
     <div class="row" style="margin-top:8px">
-      <button id="reparse">Metni yeniden tara</button>
-      <button class="ghost" id="sample">Kasım 2026 listesini yükle</button>
+      <button id="reparse">Kaydet ve tara</button>
+      <button class="ghost" id="sample">Kasım 2026 örnek listesi</button>
     </div>
     <ul class="matches" id="matches"></ul>
   </section>
@@ -160,7 +164,7 @@
   const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
   const MONTH_KEYS = ["oca","şub","mar","nis","may","haz","tem","ağu","eyl","eki","kas","ara"];
   const DOW = ["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
-  const STORE_KEY = "nobet-takvimi-v2";
+  const STORE_KEY = "nobet-takvimi-v3";
   // Duvardaki "KASIM AYI 168 saat" listesinin (el yazısı) dökümü.
   // Sol: günün nöbetçileri, "|" sonrası: Ameliyathane ("-" = boş).
   const SAMPLE = `KASIM AYI 168 saat
@@ -199,33 +203,42 @@
 
   const today = new Date();
   let view = { y: today.getFullYear(), m: today.getMonth() };
-  let duties = new Map();          // "YYYY-MM-DD" -> { n: nöbet, a: ameliyathane }
+  let rosters = {};          // "YYYY-MM" -> o ayın liste metni (herkes için ortak)
+  let overrides = {};        // isim (katlanmış) -> { "YYYY-MM-DD": {n,a} | null }  elle yapılan düzeltmeler
+  let duties = new Map();    // seçili isim için hesaplanan: "YYYY-MM-DD" -> { n: nöbet, a: ameliyathane }
 
   // ---------- persistence ----------
   function load() {
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-      if (s.duties && typeof s.duties === "object") duties = new Map(Object.entries(s.duties));
-      if (s.name) $("name").value = s.name;
-      if (s.text) $("ocrText").value = s.text;
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (_) {}
+    if (s) {
+      rosters = s.rosters || {};
+      overrides = s.overrides || {};
+      $("name").value = s.name || "";
       if (s.view) view = s.view;
-    } catch (_) {}
+    } else {
+      // İlk açılış: Kasım 2026 listesi hazır gelsin, önceki sürümde girilen isim korunsun
+      rosters = { "2026-11": SAMPLE };
+      view = { ...SAMPLE_VIEW };
+      try { $("name").value = (JSON.parse(localStorage.getItem("nobet-takvimi-v2") || "{}").name) || ""; } catch (_) {}
+    }
   }
   function save() {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({
-        duties: Object.fromEntries(duties), name: $("name").value, text: $("ocrText").value, view
-      }));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ rosters, overrides, name: $("name").value.trim(), view }));
     } catch (_) {}
   }
 
   // ---------- helpers ----------
   const pad = n => String(n).padStart(2, "0");
   const iso = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+  const ymKey = (y, m) => `${y}-${pad(m + 1)}`;
   const daysIn = (y, m) => new Date(y, m + 1, 0).getDate();
   const lower = s => s.toLocaleLowerCase("tr-TR");
-  // OCR sık sık harf karıştırır: normalize ederek karşılaştır (ı/i, ğ/g, ü/u …)
+  // Büyük/küçük harf ve Türkçe karakter farkını yok say (TUBA = Tuba, Gülcan = gulcan)
   const fold = s => lower(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ı/g, "i");
+  const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const currentName = () => $("name").value.trim();
 
   function validDate(y, m, d) {
     if (m < 0 || m > 11 || d < 1) return false;
@@ -263,7 +276,7 @@
     }
 
     // 3) Tam tarih yoksa: satırdaki 1–31 arası tek sayılar varsayılan ayın günleri
-    //    (ör. "Tuba 3 7 12 18 25" ya da "5 Perşembe Tuba")
+    //    (ör. "Ceren 3 7 12 18 25" ya da "5 Perşembe Ceren")
     if (!found.length) {
       const cleaned = consumed.replace(/\d{1,2}\s*[:.]\s*\d{2}/g, " "); // saatleri çıkar
       const dayRe = /(?<![\d.,:])(\d{1,2})(?![\d.,:])/g;
@@ -288,78 +301,113 @@
     return null;
   }
 
+  // İsim kelime olarak geçiyor mu? ("Tuba" → "Tuba Kaya" eşleşir, "Tuğba" / "Tubanur" eşleşmez)
   function lineHasName(line, name) {
     const n = fold(name.trim());
     if (!n) return false;
-    return fold(line).includes(n);
+    const words = fold(line).split(/[^a-z0-9çöşü]+/).filter(Boolean);
+    const parts = n.split(/\s+/);
+    for (let i = 0; i + parts.length <= words.length; i++) {
+      if (parts.every((p, j) => words[i + j] === p)) return true;
+    }
+    return false;
   }
 
   // ---------- parsing ----------
-  function parse() {
-    const name = $("name").value.trim();
-    const text = $("ocrText").value;
-    // Başlıkta ay/yıl yazıyorsa ("KASIM AYI", "ARALIK 2026") onu kullan
-    const head = headerMonth(text);
-    if (head) {
-      $("defMonth").value = head.m;
-      if (head.y) $("defYear").value = head.y;
-    }
-    const defY = +$("defYear").value || today.getFullYear();
-    const defM = +$("defMonth").value;
-    const list = $("matches");
-    list.innerHTML = "";
-    if (!name || !text.trim()) { render(); return; }
-
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const next = new Map();
-    const mark = (d, k) => { const v = next.get(d) || {}; v[k] = true; next.set(d, v); };
-    let hit = 0;
-    for (const line of lines) {
-      if (!lineHasName(line, name)) continue;
-      hit++;
+  // Bir ayın liste metnini verilen isim için tara
+  function parseRoster(text, y, m, name) {
+    const marks = new Map(), rows = [];
+    const mark = (d, k) => { const v = marks.get(d) || {}; v[k] = true; marks.set(d, v); };
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || !lineHasName(line, name)) continue;
       // "gün İsim - İsim | Ameliyathane": "|" sonrası ameliyathane sütunu
       const [main, surg = ""] = line.split("|");
       const lead = main.match(/^\s*\(?(\d{1,2})\)?(?!\s*[./\-]\s*\d)/);
-      const leadDate = lead && validDate(defY, defM, +lead[1]) ? [iso(defY, defM, +lead[1])] : null;
+      const leadDate = lead && validDate(y, m, +lead[1]) ? [iso(y, m, +lead[1])] : null;
       const parts = [];
       if (lineHasName(main, name)) {
-        const ds = leadDate || datesFromLine(main, defY, defM);
+        const ds = leadDate || datesFromLine(main, y, m);
         ds.forEach(d => mark(d, "n"));
         parts.push(ds.length ? `nöbet <mark>${ds.map(fmt).join(", ")}</mark>` : "nöbet: <em>tarih bulunamadı</em>");
       }
       if (lineHasName(surg, name)) {
-        const ds = leadDate || datesFromLine(surg, defY, defM);
+        const ds = leadDate || datesFromLine(surg, y, m);
         ds.forEach(d => mark(d, "a"));
         parts.push(ds.length ? `ameliyathane <mark>${ds.map(fmt).join(", ")}</mark>` : "ameliyathane: <em>tarih bulunamadı</em>");
       }
-      const li = document.createElement("li");
-      const esc = line.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-      li.innerHTML = esc + " → " + parts.join("; ");
-      list.appendChild(li);
+      rows.push(esc(line) + " → " + parts.join("; "));
     }
-
-    // Sadece bu listenin kapsadığı ayları yenile, önceki ayların işaretleri kalsın
-    const months = new Set([...next.keys()].map(k => k.slice(0, 7)));
-    months.add(`${defY}-${pad(defM + 1)}`);
-    for (const k of [...duties.keys()]) if (months.has(k.slice(0, 7))) duties.delete(k);
-    next.forEach((v, k) => duties.set(k, v));
-    if (next.size) {
-      const first = [...next.keys()].sort()[0];
-      view = { y: +first.slice(0, 4), m: +first.slice(5, 7) - 1 };
-    }
-    $("status").textContent = hit
-      ? `"${name}" geçen ${hit} satır bulundu: ${[...next.values()].filter(v => v.n).length} nöbet, ${[...next.values()].filter(v => v.a).length} ameliyathane günü işaretlendi.`
-      : `Metinde "${name}" geçen satır bulunamadı. İsmi ya da okunan metni kontrol et.`;
-    save();
-    render();
+    return { marks, rows };
   }
+
+  // Seçili isim için tüm ayların listelerinden takvimi hesapla
+  function compute() {
+    duties = new Map();
+    const name = currentName();
+    if (!name) return;
+    for (const [ym, text] of Object.entries(rosters)) {
+      const y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1;
+      parseRoster(text, y, m, name).marks.forEach((v, k) => {
+        const old = duties.get(k) || {};
+        duties.set(k, { n: old.n || !!v.n, a: old.a || !!v.a });
+      });
+    }
+    for (const [k, v] of Object.entries(overrides[fold(name)] || {})) {
+      if (v && (v.n || v.a)) duties.set(k, v); else duties.delete(k);
+    }
+  }
+
+  // Listelerde geçen isimleri bul (seçim düğmeleri için)
+  const STOP = new Set(["ayi", "ay", "saat", "nobet", "listesi", "ameliyathane", ...MONTHS.map(fold)]);
+  function rosterNames() {
+    const count = new Map(), shown = new Map();
+    for (const text of Object.values(rosters)) {
+      for (const line of text.split(/\r?\n/)) {
+        for (let part of line.split(/[|,\-–—\/]+/)) {
+          part = part.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü\s]/g, " ").replace(/\s+/g, " ").trim();
+          if (part.length < 3 || STOP.has(fold(part)) || part.split(" ").some(w => STOP.has(fold(w)))) continue;
+          const k = fold(part);
+          count.set(k, (count.get(k) || 0) + 1);
+          if (!shown.has(k)) shown.set(k, part.split(" ").map(w => w[0].toLocaleUpperCase("tr-TR") + w.slice(1)).join(" "));
+        }
+      }
+    }
+    return [...count].filter(([, c]) => c >= 2).map(([k]) => shown.get(k)).sort((a, b) => a.localeCompare(b, "tr"));
+  }
+
+  // Okunan / düzeltilen metni o ayın listesi olarak kaydet
+  function saveRoster(text) {
+    const head = headerMonth(text);
+    let y = +$("defYear").value || today.getFullYear(), m = +$("defMonth").value;
+    if (head) { m = head.m; if (head.y) y = head.y; }
+    const key = ymKey(y, m);
+    if (text.trim()) rosters[key] = text.trim(); else delete rosters[key];
+    view = { y, m };
+    refresh();
+    const name = currentName();
+    if (!name) {
+      $("status").textContent = `${MONTHS[m]} ${y} listesi kaydedildi. Takvimi görmek için yukarıya ismini yaz ya da aşağıdan seç.`;
+    } else {
+      const res = parseRoster(rosters[key] || "", y, m, name);
+      const v = [...res.marks.values()];
+      $("status").textContent = res.rows.length
+        ? `${MONTHS[m]} ${y}: "${name}" için ${v.filter(x => x.n).length} nöbet, ${v.filter(x => x.a).length} ameliyathane günü bulundu.`
+        : `${MONTHS[m]} ${y} listesinde "${name}" bulunamadı. İsmi ya da okunan metni kontrol et.`;
+    }
+  }
+
+  function refresh() { compute(); save(); render(); }
 
   const fmt = s => { const [y, m, d] = s.split("-"); return `${+d} ${MONTHS[+m - 1]}`; };
 
   // ---------- calendar ----------
   function render() {
     const { y, m } = view;
-    $("calTitle").textContent = `${MONTHS[m]} ${y}`;
+    const name = currentName();
+    $("calTitle").textContent = `${MONTHS[m]} ${y}` + (name ? ` · ${name}` : "");
+    $("defMonth").value = m;
+    $("defYear").value = y;
     const grid = $("grid");
     grid.innerHTML = "";
     DOW.forEach(d => { const e = document.createElement("div"); e.className = "dow"; e.textContent = d; grid.appendChild(e); });
@@ -367,7 +415,6 @@
     const offset = (new Date(y, m, 1).getDay() + 6) % 7; // Pazartesi başlangıç
     for (let i = 0; i < offset; i++) { const e = document.createElement("div"); e.className = "day empty"; grid.appendChild(e); }
 
-    const name = $("name").value.trim() || "Nöbet";
     for (let d = 1; d <= daysIn(y, m); d++) {
       const key = iso(y, m, d);
       const e = document.createElement("div");
@@ -380,22 +427,36 @@
       e.innerHTML = `<span class="num">${d}</span>${label ? `<span class="tag">${label}</span>` : ""}`;
       e.title = label ? `${name}: ${label}` : "Tıklayarak nöbet ekle";
       e.onclick = () => {
-        // boş → nöbet → ameliyathane → ikisi → boş
-        const state = (v.n ? 1 : 0) + (v.a ? 2 : 0);
-        const order = [0, 1, 2, 3], nextState = order[(order.indexOf(state) + 1) % 4];
-        if (!nextState) duties.delete(key);
-        else duties.set(key, { n: !!(nextState & 1), a: !!(nextState & 2) });
-        save(); render();
+        if (!name) { $("name").focus(); $("status").textContent = "Önce ismini yaz ya da seç."; return; }
+        // boş → nöbet → ameliyathane → ikisi → boş  (sadece bu isim için kaydedilir)
+        const state = (v.n ? 1 : 0) + (v.a ? 2 : 0), nextState = (state + 1) % 4;
+        const o = overrides[fold(name)] ||= {};
+        o[key] = nextState ? { n: !!(nextState & 1), a: !!(nextState & 2) } : null;
+        refresh();
       };
       grid.appendChild(e);
     }
 
-    const prefix = `${y}-${pad(m + 1)}`;
-    const days = k => [...duties].filter(([d, v]) => v[k] && d.startsWith(prefix)).map(([d]) => +d.slice(8)).sort((a, b) => a - b);
+    const prefix = ymKey(y, m);
+    const hasRoster = !!rosters[prefix];
+    const days = k => [...duties].filter(([dd, vv]) => vv[k] && dd.startsWith(prefix)).map(([dd]) => +dd.slice(8)).sort((a, b) => a - b);
     const n = days("n"), a = days("a");
-    $("summary").textContent = duties.size
-      ? `Bu ay ${n.length} nöbet${n.length ? " (" + n.join(", ") + ")" : ""}, ${a.length} ameliyathane${a.length ? " (" + a.join(", ") + ")" : ""}.`
-      : "Henüz işaretli nöbet yok.";
+    $("summary").textContent = !name
+      ? "Takvimi görmek için ismini yaz ya da aşağıdaki listeden seç."
+      : (n.length || a.length)
+        ? `${name}: bu ay ${n.length} nöbet${n.length ? " (" + n.join(", ") + ")" : ""}, ${a.length} ameliyathane${a.length ? " (" + a.join(", ") + ")" : ""}.`
+        : hasRoster ? `${name} bu ayın listesinde yok.` : "Bu ay için liste yok. Listenin fotoğrafını yükle.";
+
+    // Bu ayın metni ve eşleşen satırlar
+    if (document.activeElement !== $("ocrText")) $("ocrText").value = rosters[prefix] || "";
+    $("matches").innerHTML = name && hasRoster
+      ? parseRoster(rosters[prefix], y, m, name).rows.map(r => `<li>${r}</li>`).join("")
+      : "";
+
+    // İsim seçim düğmeleri
+    const names = rosterNames();
+    $("nameChips").innerHTML = names.map(nm =>
+      `<button type="button" class="chip${fold(nm) === fold(name) ? " on" : ""}" data-name="${esc(nm)}">${esc(nm)}</button>`).join("");
   }
 
   // ---------- OCR ----------
@@ -431,8 +492,7 @@
       const { data } = await Tesseract.recognize(canvas, "tur+eng", {
         logger: info => { if (info.status === "recognizing text") $("progress").value = info.progress; }
       });
-      $("ocrText").value = data.text;
-      parse();
+      saveRoster(data.text);
     } catch (err) {
       console.error(err);
       $("status").textContent = "Okuma sırasında hata oluştu: " + (err.message || err);
@@ -498,7 +558,7 @@ Listedeki her günü oku:
 - nobet: o günün ana nöbet sütunundaki isimler (genelde "İsim - İsim" şeklinde iki kişi).
 - ameliyathane: varsa "Ameliyathane" (veya benzeri ikinci) sütunundaki isimler; boş, "—" veya çizgi ise boş liste.
 Kağıdın kenarındaki kişi başı toplam/özet tablolarını gün olarak alma.
-İsimleri listede en sık geçen doğru yazımıyla ve ilk harfi büyük yaz (ör. "Tubo" gibi okunan yazımı listedeki "Tuba" ile eşleştir).
+İsimleri listede en sık geçen doğru yazımıyla ve ilk harfi büyük yaz (aynı kişinin farklı okunan yazımlarını listedeki en sık yazımla birleştir).
 Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getDate()}.${t.getMonth() + 1}.${t.getFullYear()}) en yakın geçerli yılını seç.`;
 
     try {
@@ -535,10 +595,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
       if (body.stop_reason === "max_tokens") throw new Error("Yanıt yarıda kesildi, tekrar dene.");
       const text = (body.content || []).filter(b => b.type === "text").map(b => b.text).join("");
       const r = rosterToText(JSON.parse(text));
-      $("ocrText").value = r.text;
-      $("defMonth").value = r.m;
-      $("defYear").value = r.y;
-      parse();
+      saveRoster(r.text);
       $("status").textContent += " Okunan listeyi aşağıdan kontrol edebilirsin.";
     } catch (err) {
       console.error(err);
@@ -548,8 +605,9 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
 
   // ---------- .ics export ----------
   function exportIcs() {
-    if (!duties.size) { alert("Dışa aktarılacak nöbet yok."); return; }
-    const name = $("name").value.trim() || "Nöbet";
+    const name = currentName();
+    if (!name) { alert("Önce ismini yaz ya da seç."); return; }
+    if (!duties.size) { alert(`${name} için dışa aktarılacak nöbet yok.`); return; }
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
     const next = k => { const d = new Date(k + "T00:00:00"); d.setDate(d.getDate() + 1);
                         return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
@@ -565,7 +623,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nobet Takvimi//TR", ...events, "END:VCALENDAR"].join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-    a.download = `${name}-nobetler.ics`;
+    a.download = `${fold(name).replace(/\s+/g, "-")}-nobetler.ics`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
@@ -573,8 +631,6 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   // ---------- wiring ----------
   MONTHS.forEach((n, i) => $("defMonth").add(new Option(n, i)));
   load();
-  $("defMonth").value = view.m;
-  $("defYear").value = view.y;
 
   $("file").onchange = e => {
     const f = e.target.files[0];
@@ -597,22 +653,32 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
     $("apiKey").value = "";
     $("status").textContent = "API anahtarı silindi.";
   };
-  $("reparse").onclick = parse;
-  $("sample").onclick = () => {
-    $("ocrText").value = SAMPLE;
-    $("defMonth").value = SAMPLE_VIEW.m; $("defYear").value = SAMPLE_VIEW.y;
-    parse();
+  $("reparse").onclick = () => saveRoster($("ocrText").value);
+  $("sample").onclick = () => saveRoster(SAMPLE);
+
+  // İsim: yazarken anında güncelle
+  let nameTimer;
+  $("name").addEventListener("input", () => { clearTimeout(nameTimer); nameTimer = setTimeout(refresh, 250); });
+  $("nameChips").onclick = e => {
+    const b = e.target.closest(".chip");
+    if (!b) return;
+    $("name").value = b.dataset.name;
+    refresh();
   };
-  $("name").onchange = parse;
-  $("defMonth").onchange = parse;
-  $("defYear").onchange = parse;
-  $("prev").onclick = () => { view.m--; if (view.m < 0) { view.m = 11; view.y--; } save(); render(); };
-  $("next").onclick = () => { view.m++; if (view.m > 11) { view.m = 0; view.y++; } save(); render(); };
-  $("clear").onclick = () => { if (confirm("Tüm nöbet işaretleri silinsin mi?")) { duties.clear(); save(); render(); } };
+
+  const go = (y, m) => { view = { y, m }; save(); render(); };
+  $("defMonth").onchange = () => go(view.y, +$("defMonth").value);
+  $("defYear").onchange = () => go(+$("defYear").value || view.y, view.m);
+  $("prev").onclick = () => go(view.m ? view.y : view.y - 1, (view.m + 11) % 12);
+  $("next").onclick = () => go(view.m === 11 ? view.y + 1 : view.y, (view.m + 1) % 12);
+  $("clear").onclick = () => {
+    const k = ymKey(view.y, view.m);
+    if (!rosters[k]) { $("status").textContent = "Bu ay için kayıtlı liste yok."; return; }
+    if (confirm(`${MONTHS[view.m]} ${view.y} listesi silinsin mi?`)) { delete rosters[k]; refresh(); }
+  };
   $("ics").onclick = exportIcs;
 
-  // İlk açılışta Kasım 2026 listesini hazır getir
-  if (!$("ocrText").value.trim()) $("sample").onclick(); else render();
+  refresh();
 
   // ---------- Telefona yükleme (PWA) ----------
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
@@ -647,7 +713,7 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
   }
 
   // Test için dışarı aç
-  window.__nobet = { datesFromLine, lineHasName, rosterToText };
+  window.__nobet = { datesFromLine, lineHasName, rosterToText, rosterNames };
 })();
 </script>
 </body>

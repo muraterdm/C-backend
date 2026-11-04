@@ -1,5 +1,5 @@
 // Nöbet Takvimi – çevrimdışı çalışma için service worker
-const CACHE = "nobet-takvimi-v1";
+const CACHE = "nobet-takvimi-v2";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest",
                "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
 

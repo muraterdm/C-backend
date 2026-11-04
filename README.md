@@ -1,6 +1,6 @@
 # Nöbet Takvimi
 
-Aylık nöbet listesinin fotoğrafından seçilen kişinin (varsayılan: **Tuba**) nöbet ve ameliyathane günlerini bulup takvimde işaretleyen tek sayfalık web uygulaması.
+Aylık nöbet listesinin fotoğrafından, **İsim** alanına yazılan ya da listeden seçilen kişinin nöbet ve ameliyathane günlerini bulup takvimde işaretleyen web uygulaması.
 
 Canlı adres (GitHub Pages açıldıysa): https://muraterdm.github.io/C-backend/
 
@@ -14,10 +14,12 @@ Uygulama bir PWA'dır: telefona yüklenince ana ekranda simgesiyle açılır, ta
 
 ## Her ay kullanım
 
-1. Sayfayı aç, **Fotoğraf** alanından o ayın listesinin fotoğrafını seç.
+1. Sayfayı aç, **İsim** alanına ismini yaz ya da altta çıkan isim düğmelerinden birine dokun (bir kez seçmen yeterli, hatırlanır).
+   Fotoğraf alanından o ayın listesinin fotoğrafını seç.
 2. Fotoğraf Claude'a gönderilir; el yazısı liste okunur, ay/yıl başlıktan alınır ve günler takvimde işaretlenir.
 3. "Okunan metin" kutusunda sonucu kontrol et; hata varsa düzeltip **Metni yeniden tara**'ya bas.
-4. Önceki ayların işaretleri silinmez; ay okları ile geçmiş aylara bakabilirsin.
+4. Her ayın listesi bir kez kaydedilir ve herkes için ortaktır: isim değiştirince aynı listelerden o kişinin günleri anında gösterilir.
+   Ay okları ile geçmiş aylara bakabilirsin.
 5. **Takvime aktar (.ics)** ile telefon takvimine ekleyebilirsin.
 
 ## İlk kurulum (her telefonda bir kez)
@@ -41,4 +43,5 @@ ARALIK 2026
 `gün İsim - İsim | Ameliyathane` — `|` sonrası ameliyathane sütunudur, `-` boş demektir.
 Başka biçimler de tanınır: `05.11.2026`, `12 Kasım`, `Tuba 3 7 12` (varsayılan ayın günleri).
 
-İsim eşleşmesi büyük/küçük harf duyarsızdır (`TUBA`, `Tuba`); `Tuğba` gibi farklı isimler eşleşmez.
+İsim eşleşmesi büyük/küçük harf ve Türkçe karakter farkına duyarsızdır (`TUBA`, `tuba`, `Gulcan` = `Gülcan`) ve tam kelime arar
+(`Tuba` → `Tuba Kaya` eşleşir; `Tuğba`, `Tubanur` eşleşmez). Takvimde bir güne dokunarak yapılan elle düzeltmeler sadece o isim için saklanır.
