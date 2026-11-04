@@ -70,7 +70,7 @@
 <body>
 <main>
   <h1>Nöbet Takvimi</h1>
-  <p class="sub">Nöbet listesinin fotoğrafını yükle. Uygulama yazıları okur, seçtiğin ismin geçtiği satırları bulur ve o nöbet günlerini takvimde işaretler.</p>
+  <p class="sub">Her ay yeni nöbet listesinin fotoğrafını yükle. Uygulama yazıları okur, seçtiğin ismin geçtiği satırları bulur ve o nöbet günlerini takvimde işaretler.</p>
 
   <section class="card">
     <div class="row">
@@ -87,6 +87,19 @@
         <input type="number" id="defYear" min="2000" max="2100" style="width:6rem">
       </label>
     </div>
+    <details id="aiBox" style="margin-top:12px">
+      <summary>El yazısı okuma ayarı (Claude API anahtarı)</summary>
+      <p class="status" style="margin-top:6px">El yazısı listeleri doğru okumak için fotoğraf Claude'a gönderilir. Anahtarı
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> adresinden alabilirsin.
+        Anahtar yalnızca bu telefonun tarayıcısında saklanır ve sadece api.anthropic.com'a gönderilir. Anahtar yoksa basit metin okuma kullanılır (el yazısında hatalı olabilir).</p>
+      <div class="row">
+        <label style="flex:1;min-width:200px">API anahtarı
+          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+        </label>
+        <button id="saveKey" type="button">Kaydet</button>
+        <button id="delKey" type="button" class="ghost">Sil</button>
+      </div>
+    </details>
     <img id="preview" alt="Yüklenen nöbet listesi">
     <div id="progressWrap" style="display:none;margin-top:12px"><progress id="progress" max="1" value="0"></progress></div>
     <div class="status" id="status">Henüz fotoğraf yüklenmedi.</div>
@@ -246,6 +259,19 @@
     return found;
   }
 
+  function headerMonth(text) {
+    for (const line of text.split(/\r?\n/).slice(0, 3)) {
+      const low = lower(line);
+      if (/^\s*\d/.test(low)) continue;            // gün satırı değil, başlık ara
+      const words = low.match(/[a-zçğıöşü]+/g) || [];
+      const mi = words.map(w => MONTHS.findIndex(n => lower(n) === w)).find(i => i >= 0);
+      if (mi == null) continue;
+      const y = low.match(/\b(20\d{2})\b/);
+      return { m: mi, y: y ? +y[1] : null };
+    }
+    return null;
+  }
+
   function lineHasName(line, name) {
     const n = fold(name.trim());
     if (!n) return false;
@@ -256,6 +282,12 @@
   function parse() {
     const name = $("name").value.trim();
     const text = $("ocrText").value;
+    // Başlıkta ay/yıl yazıyorsa ("KASIM AYI", "ARALIK 2026") onu kullan
+    const head = headerMonth(text);
+    if (head) {
+      $("defMonth").value = head.m;
+      if (head.y) $("defYear").value = head.y;
+    }
     const defY = +$("defYear").value || today.getFullYear();
     const defM = +$("defMonth").value;
     const list = $("matches");
@@ -290,19 +322,22 @@
       list.appendChild(li);
     }
 
-    duties = next;
-    if (duties.size) {
-      const first = [...duties.keys()].sort()[0];
+    // Sadece bu listenin kapsadığı ayları yenile, önceki ayların işaretleri kalsın
+    const months = new Set([...next.keys()].map(k => k.slice(0, 7)));
+    months.add(`${defY}-${pad(defM + 1)}`);
+    for (const k of [...duties.keys()]) if (months.has(k.slice(0, 7))) duties.delete(k);
+    next.forEach((v, k) => duties.set(k, v));
+    if (next.size) {
+      const first = [...next.keys()].sort()[0];
       view = { y: +first.slice(0, 4), m: +first.slice(5, 7) - 1 };
     }
     $("status").textContent = hit
-      ? `"${name}" geçen ${hit} satır bulundu: ${count("n")} nöbet, ${count("a")} ameliyathane günü işaretlendi.`
+      ? `"${name}" geçen ${hit} satır bulundu: ${[...next.values()].filter(v => v.n).length} nöbet, ${[...next.values()].filter(v => v.a).length} ameliyathane günü işaretlendi.`
       : `Metinde "${name}" geçen satır bulunamadı. İsmi ya da okunan metni kontrol et.`;
     save();
     render();
   }
 
-  const count = (k, prefix = "") => [...duties].filter(([d, v]) => v[k] && d.startsWith(prefix)).length;
   const fmt = s => { const [y, m, d] = s.split("-"); return `${+d} ${MONTHS[+m - 1]}`; };
 
   // ---------- calendar ----------
@@ -390,6 +425,111 @@
     }
   }
 
+  // ---------- Claude ile el yazısı okuma ----------
+  const KEY_STORE = "nobet-takvimi-apikey";
+  const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ""; } catch (_) { return ""; } };
+
+  async function toJpegBase64(file) {
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, 1568 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * scale);
+    c.height = Math.round(img.height * scale);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.9).split(",")[1];
+  }
+
+  const ROSTER_SCHEMA = {
+    type: "object",
+    properties: {
+      month: { type: "integer", description: "Ay numarası, 1-12" },
+      year: { type: "integer" },
+      days: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            day: { type: "integer" },
+            nobet: { type: "array", items: { type: "string" } },
+            ameliyathane: { type: "array", items: { type: "string" } }
+          },
+          required: ["day", "nobet", "ameliyathane"],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ["month", "year", "days"],
+    additionalProperties: false
+  };
+
+  // Claude'un JSON yanıtını uygulamanın metin biçimine çevir
+  function rosterToText(roster) {
+    const m = Math.min(12, Math.max(1, roster.month)) - 1;
+    const lines = [`${MONTHS[m].toLocaleUpperCase("tr-TR")} ${roster.year}`];
+    roster.days.slice().sort((a, b) => a.day - b.day).forEach(d => {
+      lines.push(`${d.day} ${d.nobet.join(" - ") || "-"} | ${d.ameliyathane.join(", ") || "-"}`);
+    });
+    return { m, y: roster.year, text: lines.join("\n") };
+  }
+
+  async function runClaude(file, key) {
+    $("progressWrap").style.display = "none";
+    $("status").textContent = "Fotoğraf Claude ile okunuyor… (yaklaşık 30 saniye – 1 dakika)";
+    const t = new Date();
+    const prompt = `Bu fotoğraf bir hastane ekibinin aylık nöbet listesi (genellikle el yazısı, Türkçe).
+Listedeki her günü oku:
+- day: gün numarası (daire içine alınmış olabilir, o günler hafta sonu/tatil işaretidir).
+- nobet: o günün ana nöbet sütunundaki isimler (genelde "İsim - İsim" şeklinde iki kişi).
+- ameliyathane: varsa "Ameliyathane" (veya benzeri ikinci) sütunundaki isimler; boş, "—" veya çizgi ise boş liste.
+Kağıdın kenarındaki kişi başı toplam/özet tablolarını gün olarak alma.
+İsimleri listede en sık geçen doğru yazımıyla ve ilk harfi büyük yaz (ör. "Tubo" gibi okunan yazımı listedeki "Tuba" ile eşleştir).
+Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getDate()}.${t.getMonth() + 1}.${t.getFullYear()}) en yakın geçerli yılını seç.`;
+
+    try {
+      const data = await toJpegBase64(file);
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2026-10-21",
+          "anthropic-beta": "server-side-fallback-2026-07-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-opus-5-5",
+          max_tokens: 16000,
+          fallbacks: "default",
+          output_config: { effort: "high", format: { type: "json_schema", schema: ROSTER_SCHEMA } },
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: "image/jpeg", data } },
+              { type: "text", text: prompt }
+            ]
+          }]
+        })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = body?.error?.message || res.statusText;
+        throw new Error(res.status === 401 ? "API anahtarı geçersiz. Ayarlardan kontrol et." : `${res.status}: ${msg}`);
+      }
+      if (body.stop_reason === "refusal") throw new Error("Claude bu isteği işlemedi. Fotoğrafı tekrar dene.");
+      if (body.stop_reason === "max_tokens") throw new Error("Yanıt yarıda kesildi, tekrar dene.");
+      const text = (body.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+      const r = rosterToText(JSON.parse(text));
+      $("ocrText").value = r.text;
+      $("defMonth").value = r.m;
+      $("defYear").value = r.y;
+      parse();
+      $("status").textContent += " Okunan listeyi aşağıdan kontrol edebilirsin.";
+    } catch (err) {
+      console.error(err);
+      $("status").textContent = "Claude ile okuma başarısız: " + (err.message || err);
+    }
+  }
+
   // ---------- .ics export ----------
   function exportIcs() {
     if (!duties.size) { alert("Dışa aktarılacak nöbet yok."); return; }
@@ -426,7 +566,20 @@
     const pv = $("preview");
     pv.src = URL.createObjectURL(f);
     pv.style.display = "block";
-    runOcr(f);
+    const key = getKey();
+    key ? runClaude(f, key) : runOcr(f);
+    e.target.value = "";   // aynı fotoğraf tekrar seçilebilsin
+  };
+  $("apiKey").value = getKey();
+  if (!getKey()) $("aiBox").open = true;
+  $("saveKey").onclick = () => {
+    try { localStorage.setItem(KEY_STORE, $("apiKey").value.trim()); } catch (_) {}
+    $("status").textContent = $("apiKey").value.trim() ? "API anahtarı kaydedildi. Artık fotoğraf yükleyebilirsin." : "Anahtar boş.";
+  };
+  $("delKey").onclick = () => {
+    try { localStorage.removeItem(KEY_STORE); } catch (_) {}
+    $("apiKey").value = "";
+    $("status").textContent = "API anahtarı silindi.";
   };
   $("reparse").onclick = parse;
   $("sample").onclick = () => {
@@ -446,7 +599,7 @@
   if (!$("ocrText").value.trim()) $("sample").onclick(); else render();
 
   // Test için dışarı aç
-  window.__nobet = { datesFromLine, lineHasName };
+  window.__nobet = { datesFromLine, lineHasName, rosterToText };
 })();
 </script>
 </body>

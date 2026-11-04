@@ -1,22 +1,36 @@
 # Nöbet Takvimi
 
-Nöbet listesinin fotoğrafından seçilen kişinin (varsayılan: **Tuba**) nöbet günlerini bulup takvimde işaretleyen tek sayfalık web uygulaması.
+Aylık nöbet listesinin fotoğrafından seçilen kişinin (varsayılan: **Tuba**) nöbet ve ameliyathane günlerini bulup takvimde işaretleyen tek sayfalık web uygulaması.
 
-## Kullanım
+Canlı adres (GitHub Pages açıldıysa): https://muraterdm.github.io/C-backend/
 
-1. `index.html` dosyasını tarayıcıda aç (sunucu gerekmez, internet bağlantısı OCR kütüphanesi için gerekir).
-2. **Fotoğraf** alanından nöbet listesinin fotoğrafını seç.
-3. Uygulama metni okur (Tesseract.js, Türkçe + İngilizce), içinde "Tuba" geçen satırları bulur ve bu satırlardaki tarihleri takvimde işaretler.
-4. Okuma hatalıysa "Okunan metin" kutusunda düzeltip **Metni yeniden tara**'ya bas; ya da takvimde bir güne tıklayarak işareti elle ekle/kaldır.
-5. **Takvime aktar (.ics)** ile nöbetleri telefon/Google/Outlook takvimine ekleyebilirsin.
+## Her ay kullanım
 
-## Tanınan tarih biçimleri
+1. Sayfayı aç, **Fotoğraf** alanından o ayın listesinin fotoğrafını seç.
+2. Fotoğraf Claude'a gönderilir; el yazısı liste okunur, ay/yıl başlıktan alınır ve günler takvimde işaretlenir.
+3. "Okunan metin" kutusunda sonucu kontrol et; hata varsa düzeltip **Metni yeniden tara**'ya bas.
+4. Önceki ayların işaretleri silinmez; ay okları ile geçmiş aylara bakabilirsin.
+5. **Takvime aktar (.ics)** ile telefon takvimine ekleyebilirsin.
 
-- `05.11.2026`, `5/11/26`, `05-11` (yıl yoksa "Varsayılan yıl" kullanılır)
-- `12 Kasım`, `12 Kasım 2026`
-- Sadece gün numaraları: `Tuba 3 7 12 18` veya `5 Perşembe Tuba` → "Varsayılan ay/yıl"ın günleri
-- Satır başında gün + `|` ile ayrılmış ameliyathane sütunu: `4 Hatice - Nahide | Tuba` → nöbet ve ameliyathane ayrı renkte işaretlenir
+## İlk kurulum (her telefonda bir kez)
+
+El yazısını okumak için bir Claude API anahtarı gerekir:
+
+1. https://console.anthropic.com adresinde hesap aç, kredi yükle, **API Keys** bölümünden anahtar oluştur.
+2. Uygulamada **El yazısı okuma ayarı** bölümüne anahtarı yapıştırıp **Kaydet**'e bas.
+
+Anahtar yalnızca o tarayıcıda (localStorage) saklanır ve sadece `api.anthropic.com`'a gönderilir; depoya veya başka bir yere yazılmaz.
+Anahtar girilmezse tarayıcıda çalışan Tesseract OCR kullanılır; bu yöntem basılı listelerde çalışır ama el yazısında güvenilir değildir.
+
+## Metin biçimi
+
+```
+ARALIK 2026
+1 Tuba - Ceren | -
+2 Rojda - Selma | Tuba
+```
+
+`gün İsim - İsim | Ameliyathane` — `|` sonrası ameliyathane sütunudur, `-` boş demektir.
+Başka biçimler de tanınır: `05.11.2026`, `12 Kasım`, `Tuba 3 7 12` (varsayılan ayın günleri).
 
 İsim eşleşmesi büyük/küçük harf duyarsızdır (`TUBA`, `Tuba`); `Tuğba` gibi farklı isimler eşleşmez.
-El yazısı listeler OCR ile güvenilir okunamaz; Kasım 2026 listesi elle dökülüp uygulamaya gömülüdür ("Kasım 2026 listesini yükle").
-Veriler yalnızca tarayıcının yerel deposunda saklanır.
