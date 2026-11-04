@@ -4,6 +4,14 @@ Aylık nöbet listesinin fotoğrafından seçilen kişinin (varsayılan: **Tuba*
 
 Canlı adres (GitHub Pages açıldıysa): https://muraterdm.github.io/C-backend/
 
+## Telefona yükleme
+
+Uygulama bir PWA'dır: telefona yüklenince ana ekranda simgesiyle açılır, tam ekran çalışır, internet yokken de takvimi gösterir
+(fotoğraf okuma için internet gerekir).
+
+- **Android (Chrome):** sayfayı aç → üstte çıkan **Yükle** düğmesine dokun (ya da ⋮ menü → **Uygulamayı yükle**).
+- **iPhone (Safari):** sayfayı aç → **Paylaş** → **Ana Ekrana Ekle**.
+
 ## Her ay kullanım
 
 1. Sayfayı aç, **Fotoğraf** alanından o ayın listesinin fotoğrafını seç.

@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nöbet Takvimi</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#c2185b">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nöbetler">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
   :root {
     --bg: #f6f7fb; --card: #ffffff; --text: #1d2330; --muted: #6b7280;
@@ -20,7 +28,10 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 960px; margin: 0 auto; padding: 16px; }
+  main { max-width: 960px; margin: 0 auto; padding: 16px;
+         padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .install { display: none; align-items: center; gap: 10px; justify-content: space-between; }
+  .install.show { display: flex; }
   h1 { font-size: 1.5rem; margin: 8px 0 4px; }
   p.sub { color: var(--muted); margin: 0 0 16px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
@@ -71,6 +82,11 @@
 <main>
   <h1>Nöbet Takvimi</h1>
   <p class="sub">Her ay yeni nöbet listesinin fotoğrafını yükle. Uygulama yazıları okur, seçtiğin ismin geçtiği satırları bulur ve o nöbet günlerini takvimde işaretler.</p>
+
+  <section class="card install" id="installCard">
+    <span id="installText">Bu uygulamayı telefonuna yükle: ana ekranda simgesiyle açılır, internetsiz de çalışır.</span>
+    <button id="installBtn">Yükle</button>
+  </section>
 
   <section class="card">
     <div class="row">
@@ -597,6 +613,38 @@ Ay başlıkta yazıyorsa onu kullan; yıl yazmıyorsa listenin bugüne (${t.getD
 
   // İlk açılışta Kasım 2026 listesini hazır getir
   if (!$("ocrText").value.trim()) $("sample").onclick(); else render();
+
+  // ---------- Telefona yükleme (PWA) ----------
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW kaydı başarısız", err));
+  }
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", e => {   // Android / Chrome
+    e.preventDefault();
+    installEvt = e;
+    $("installCard").classList.add("show");
+  });
+  $("installBtn").onclick = async () => {
+    if (installEvt) {
+      installEvt.prompt();
+      await installEvt.userChoice;
+      installEvt = null;
+      $("installCard").classList.remove("show");
+    } else {
+      $("installCard").classList.remove("show");
+      try { localStorage.setItem("nobet-install-hint", "1"); } catch (_) {}
+    }
+  };
+  window.addEventListener("appinstalled", () => $("installCard").classList.remove("show"));
+  // iPhone/iPad: otomatik yükleme penceresi yok, adımları göster
+  let hintSeen = false;
+  try { hintSeen = !!localStorage.getItem("nobet-install-hint"); } catch (_) {}
+  if (!standalone && !hintSeen && /iphone|ipad|ipod/i.test(navigator.userAgent)) {
+    $("installText").innerHTML = "Telefonuna yüklemek için: Safari'de alttaki <b>Paylaş</b> düğmesine, sonra <b>Ana Ekrana Ekle</b>'ye dokun.";
+    $("installBtn").textContent = "Tamam";
+    $("installCard").classList.add("show");
+  }
 
   // Test için dışarı aç
   window.__nobet = { datesFromLine, lineHasName, rosterToText };
