@@ -116,6 +116,14 @@
     <button class="link" id="installClose">Tamam, kapat</button>
   </section>
 
+  <section class="card" id="installAndroid" hidden>
+    <h2>📲 Telefona yükle</h2>
+    <p><b>Uygulama olarak (önerilen):</b> <a href="https://github.com/muraterdm/C-backend/releases/download/ders-programi-apk/ders-programi.apk">ders-programi.apk</a> dosyasını indir, açınca <b>Yükle</b> de
+      (“bilinmeyen uygulamalara izin ver” sorarsa izin ver). Bu sürüm dersleri takvime doğrudan ekler ve geri silebilir.</p>
+    <p><b>Ya da bu sayfayı yükle:</b> Chrome'da sağ üstteki <b>⋮</b> menüsü → <b>Ana ekrana ekle</b> (ya da <b>Uygulamayı yükle</b>) → <b>Yükle</b>.</p>
+    <button class="link" id="installAndroidClose">Tamam, kapat</button>
+  </section>
+
   <section class="card" id="settings" hidden>
     <h2>Gemini API anahtarı (ücretsiz)</h2>
     <ol class="steps">
@@ -629,13 +637,17 @@ $("edDays").onclick = e => { const b = e.target.closest("[data-d]"); if (b) { ed
 $("edSave").onclick = saveEditor;
 $("edCancel").onclick = () => $("editor").close();
 $("edDelete").onclick = () => { lessons = lessons.filter(l => l.id !== editing.id); save(); render(); $("editor").close(); };
+$("installAndroidClose").onclick = () => { $("installAndroid").hidden = true; store.set("dp_install_seen2", true); };
 $("installClose").onclick = () => { $("install").hidden = true; store.set("dp_install_seen2", true); };
 
 // ---------- başlangıç ----------
 $("start").value = store.get("dp_start", "") || ymd(new Date());
 fillPlanInputs();
 if (!apiKey) openSettings();
-if (isIOS && !isStandalone() && !store.get("dp_install_seen2", false)) $("install").hidden = false;
+if (!isStandalone() && !store.get("dp_install_seen2", false)) {
+  if (isIOS) $("install").hidden = false;
+  else if (isAndroid) $("installAndroid").hidden = false;
+}
 render();
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW kaydı başarısız", err));

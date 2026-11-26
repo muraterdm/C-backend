@@ -12,6 +12,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # APK'yı sürüm (release) olarak yayınlamak için
     defaults:
       run:
         working-directory: ders-programi
@@ -36,3 +38,12 @@ jobs:
         with:
           name: ders-programi-apk
           path: ders-programi/android/app/build/outputs/apk/release/*.apk
+      - name: APK'yı sabit indirme bağlantısına koy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/*.apk ders-programi.apk
+          gh release view ders-programi-apk >/dev/null 2>&1 || \
+            gh release create ders-programi-apk --target "$GITHUB_SHA" --title "Ders Programı – Android APK" \
+              --notes "Telefondan indir: ders-programi.apk dosyasına dokun, açınca Yükle de (bilinmeyen kaynaklara izin ver). Her derlemede güncellenir."
+          gh release upload ders-programi-apk ders-programi.apk --clobber
