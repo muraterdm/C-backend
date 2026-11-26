@@ -68,6 +68,14 @@
   .lesson { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; margin-bottom: 6px; border-radius: 10px;
     background: var(--row); color: var(--text); font-weight: 400; text-align: left; }
   .lesson.bad { background: var(--danger-soft); }
+  details.one { margin-top: 12px; }
+  details.one summary { font-weight: 600; cursor: pointer; padding: 6px 0; }
+  .onelist { list-style: none; padding: 0; margin: 6px 0 0; }
+  .onelist a { display: block; padding: 10px 12px; margin-bottom: 6px; border-radius: 10px; background: var(--row);
+    color: var(--text); font-weight: 500; text-decoration: none; }
+  .onelist a::after { content: " ›"; color: var(--muted); }
+  .onelist li.done a { opacity: .5; }
+  .onelist li.done a::after { content: " ✓"; color: var(--primary); }
   .lesson .t { width: 48px; flex: none; font-size: 13px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; line-height: 1.3; }
   .lesson .c { flex: 1; min-width: 0; }
   .lesson .n { font-weight: 600; }
@@ -198,6 +206,11 @@
         <button class="soft grow" id="expAgain">Takvim ekranını tekrar aç</button>
         <button class="soft grow" id="expShare">Dosyayı paylaş / kaydet</button>
       </div>
+      <details class="one" id="oneBox">
+        <summary id="oneTitle">Tek tek ekle</summary>
+        <p class="small" id="oneHint"></p>
+        <ul class="onelist" id="oneList"></ul>
+      </details>
       <p class="small" style="margin-top:10px">💡 İpucu: Takvim uygulamasında önce “Ders Programı” adında yeni bir takvim oluşturup dersleri ona eklersen, dönem bitince o takvimi silerek hepsini tek seferde kaldırabilirsin.</p>
     </div>
   </section>
@@ -574,6 +587,7 @@ function exportCalendar() {
   if (!confirm(`${final.length} ders, ${fmt(start)} – ${fmt(termEnd(start, settings.weeks))} arasında her hafta tekrarlanacak.` +
                (settings.reminder ? `\nHatırlatma: ${settings.reminder} dk önce` : "") + "\n\nDevam edilsin mi?")) return;
   lastIcs = buildIcs(final, start);
+  renderOneByOne(final, start);
   $("exportPanel").hidden = false;
   $("expAgain").hidden = !isIOS;
   $("exportHint").innerHTML = isIOS
@@ -581,11 +595,48 @@ function exportCalendar() {
         ? "Açılan ekranda <b>Tümünü Ekle</b>'ye bas ve takvimi seç. Ekran boş kalırsa “Dosyayı paylaş / kaydet” → <b>Takvim</b>'i dene ya da aynı adresi <b>Safari</b>'de açıp orada ekle."
         : "Açılan ekranda <b>Tümünü Ekle</b>'ye bas ve takvimi seç.")
     : isAndroid
-      ? "İndirilen <b>ders-programi.ics</b> dosyasına dokun ve <b>Takvim</b> uygulamasını seç (Samsung Takvim, Google Takvim…), sonra <b>Kaydet / İçe aktar</b>."
+      ? "İndirilen <b>ders-programi.ics</b> dosyasına dokun ve <b>Takvim</b> uygulamasını seç (Samsung Takvim…), sonra <b>Kaydet / İçe aktar</b>. Dosya açılmazsa (ör. sadece Google Takvim varsa) aşağıdan dersleri tek tek ekle."
       : "İndirilen dosyayı aç ya da Google Takvim'de Ayarlar → İçe aktar ile yükle.";
   if (isIOS) openAppleCalendar(); else downloadIcs();
   $("exportPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
+// Her ders için takvim uygulamasının "yeni etkinlik" ekranını haftalık tekrarla doldurulmuş aç.
+// Android: telefonun takvim uygulaması (intent); diğerleri ya da açılamazsa: Google Takvim web.
+function renderOneByOne(list, start) {
+  const untilDate = termEnd(start, settings.weeks); untilDate.setHours(23, 59, 59, 0);
+  const until = untilDate.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");   // UTC, ör. 20270307T205959Z
+  const rrule = `FREQ=WEEKLY;UNTIL=${until}`;
+  const gdate = d => icsLocal(d);
+  $("oneTitle").textContent = isAndroid ? "Tek tek ekle (telefonun takvim uygulamasında açılır)" : "Google Takvim'e tek tek ekle";
+  $("oneHint").innerHTML = isAndroid
+    ? "Her derse dokun → açılan ekranda bilgiler dolu gelir (her hafta tekrar) → <b>Kaydet</b>. Hatırlatmayı o ekranda seçebilirsin. Sonra bu sayfaya geri dön, sıradakine geç."
+    : "Her ders Google Takvim'de her hafta tekrarlayan etkinlik olarak açılır; <b>Kaydet</b>'e bas.";
+  $("oneList").innerHTML = list.map(l => {
+    const s = firstOccurrence(start, l.day, normalizeTime(l.start)), e = firstOccurrence(start, l.day, normalizeTime(l.end));
+    const details = [l.teacher && "Öğretmen: " + l.teacher, periodLabel(l), "Ders Programı uygulamasıyla eklendi"].filter(Boolean).join("\n");
+    const google = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+      + "&text=" + encodeURIComponent(l.course)
+      + "&dates=" + gdate(s) + "/" + gdate(e)
+      + "&ctz=" + encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Istanbul")
+      + "&recur=" + encodeURIComponent("RRULE:" + rrule)
+      + (l.location ? "&location=" + encodeURIComponent(l.location) : "")
+      + "&details=" + encodeURIComponent(details);
+    let href = google;
+    if (isAndroid) {
+      href = "intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;"
+        + "S.title=" + encodeURIComponent(l.course) + ";"
+        + "l.beginTime=" + s.getTime() + ";l.endTime=" + e.getTime() + ";"
+        + "S.rrule=" + encodeURIComponent(rrule) + ";"
+        + (l.location ? "S.eventLocation=" + encodeURIComponent(l.location) + ";" : "")
+        + "S.description=" + encodeURIComponent(details) + ";"
+        + "S.browser_fallback_url=" + encodeURIComponent(google) + ";end";
+    }
+    const label = `${DAY_SHORT[l.day - 1]} ${normalizeTime(l.start)}–${normalizeTime(l.end)} · ${l.course}`;
+    return `<li><a href="${esc(href)}"${isAndroid ? "" : ' target="_blank" rel="noopener"'}>${esc(label)}</a></li>`;
+  }).join("");
+  $("oneBox").open = isAndroid;
+}
+
 function openAppleCalendar() {
   if (!navigator.serviceWorker || !navigator.serviceWorker.controller) { shareIcs(); return; }
   const bytes = new TextEncoder().encode(lastIcs);
@@ -633,6 +684,7 @@ $("reminders").onclick = e => { const b = e.target.closest("[data-r]"); if (b) {
 $("addCal").onclick = exportCalendar;
 $("expAgain").onclick = openAppleCalendar;
 $("expShare").onclick = shareIcs;
+$("oneList").onclick = e => { const li = e.target.closest("li"); if (li) li.classList.add("done"); };
 $("edDays").onclick = e => { const b = e.target.closest("[data-d]"); if (b) { editing._day = +b.dataset.d; renderDays(); } };
 $("edSave").onclick = saveEditor;
 $("edCancel").onclick = () => $("editor").close();
