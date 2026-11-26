@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import type { Lesson } from "./schedule";
+import { DEFAULT_PLAN, type Lesson, type PeriodPlan } from "./schedule";
 
 const KEY_API = "gemini_api_key";
 const KEY_LESSONS = "lessons_v1";
@@ -28,7 +28,10 @@ export const saveLessons = (l: Lesson[]) => setJson(KEY_LESSONS, l);
 export const loadAddedEvents = () => getJson<string[]>(KEY_EVENTS, []);
 export const saveAddedEvents = (ids: string[]) => setJson(KEY_EVENTS, ids);
 
-export type Settings = { weeks: number; reminder: number; merge: boolean; calendarId?: string };
-export const DEFAULT_SETTINGS: Settings = { weeks: 14, reminder: 10, merge: true };
-export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await getJson<Partial<Settings>>(KEY_SETTINGS, {})) });
+export type Settings = { weeks: number; reminder: number; merge: boolean; calendarId?: string; plan: PeriodPlan };
+export const DEFAULT_SETTINGS: Settings = { weeks: 14, reminder: 10, merge: true, plan: DEFAULT_PLAN };
+export const loadSettings = async (): Promise<Settings> => {
+  const saved = await getJson<Partial<Settings>>(KEY_SETTINGS, {});
+  return { ...DEFAULT_SETTINGS, ...saved, plan: { ...DEFAULT_PLAN, ...saved.plan } };
+};
 export const saveSettings = (s: Settings) => setJson(KEY_SETTINGS, s);

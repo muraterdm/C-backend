@@ -4,20 +4,25 @@ import { Lesson, newId, normalizeTime } from "./schedule";
 // Sırayla denenir: bir model kaldırılmışsa / kota dolmuşsa sonrakine geçilir.
 const MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 
-const PROMPT = `Bu fotoğraf bir haftalık ders programı (okul / üniversite / kurs).
-Programdaki HER ders saatini çıkar.
+const PROMPT = `Bu fotoğraf bir haftalık ders programı (okul / üniversite / kurs; öğrenci ya da öğretmen programı olabilir).
+Programdaki HER dolu ders hücresini ayrı bir kayıt olarak çıkar.
 
 Kurallar:
 - day: haftanın günü, 1=Pazartesi, 2=Salı, 3=Çarşamba, 4=Perşembe, 5=Cuma, 6=Cumartesi, 7=Pazar.
   Gün adları kısaltılmış (Pzt, Sa, Çrş, Prş, Cu, Cmt, Pz) veya İngilizce (Mon, Tue…) olabilir.
-- start / end: 24 saat biçiminde "HH:MM". Saatler satır/sütun başlığında yazıyorsa onları kullan.
-  Sadece "1. ders, 2. ders" gibi ders numaraları varsa ve programda saat çizelgesi yoksa
-  makul bir okul düzeni varsay (1. ders 08:30, 40 dk ders, 10 dk teneffüs) ve notes alanında bunu belirt.
-- course: dersin adı, fotoğrafta yazdığı gibi (kod varsa adla birlikte, ör. "MAT101 Matematik").
-- location: derslik / sınıf / bina (yoksa boş bırak). teacher: öğretmen / öğretim üyesi (yoksa boş).
+- SAATLER: Programda saatler yazıyorsa start / end alanlarına 24 saat biçiminde "HH:MM" olarak yaz, period'u boş bırak.
+  Programda saat YOKSA (sadece satırlar ya da "1. ders, 2. ders" gibi numaralar varsa) ASLA saat uydurma:
+  start / end boş kalsın, period alanına hücrenin kaçıncı ders satırında olduğunu yaz (en üstteki ders satırı = 1).
+  Satır numarasını sayarken boş satırları da say: ör. Perşembe sütununda ilk dolu hücre 5. satırdaysa period = 5.
+- course: dersin adı, düzgün yazımla (TAMAMEN BÜYÜK HARF yazılmışsa Türkçe kurallarıyla sadece baş harfleri büyük yap,
+  ör. "BİRİNCİ YABANCI DİL (İNGİLİZCE)" → "Birinci Yabancı Dil (İngilizce)").
+  Hücrede sınıf / şube bilgisi varsa kısaca sona ekle: "AL - 11. Sınıf / F Şubesi" → "Seçmeli Yabancı Dil – 11/F".
+- location: derslik ve varsa bina, kısa haliyle (ör. "K216 Derslik · Harput Anadolu Lisesi Binası"); yoksa boş.
+- teacher: hücrede öğretmen adı yazıyorsa onu yaz; yoksa boş (başlıktaki programın sahibini her derse yazma).
 - Boş hücreleri, "öğle arası", "teneffüs", "boş" gibi ders olmayan hücreleri ATLA.
-- Bir ders birden fazla saate yayılıyorsa (birleştirilmiş hücre) tek kayıt olarak, ilk saatin başlangıcı ve son saatin bitişiyle yaz.
-- Okuyamadığın veya emin olmadığın şeyleri notes alanına kısaca yaz.
+- Birleştirilmiş (birden fazla satıra yayılan) hücre: saatliyse tek kayıt (ilk başlangıç–son bitiş);
+  numaralıysa kapladığı her satır için ayrı kayıt yaz.
+- Okuyamadığın veya emin olmadığın şeyleri notes alanına kısaca Türkçe yaz; her şey netse notes boş kalsın.
 - Fotoğraf ders programı değilse lessons boş liste olsun ve notes'ta nedenini söyle.`;
 
 const SCHEMA = {
@@ -32,10 +37,11 @@ const SCHEMA = {
           day: { type: "INTEGER" },
           start: { type: "STRING" },
           end: { type: "STRING" },
+          period: { type: "INTEGER" },
           location: { type: "STRING" },
           teacher: { type: "STRING" },
         },
-        required: ["course", "day", "start", "end"],
+        required: ["course", "day"],
       },
     },
     notes: { type: "STRING" },
@@ -95,7 +101,10 @@ export async function readSchedule(apiKey: string, base64: string, mimeType = "i
           end: normalizeTime(l.end) ?? String(l.end ?? ""),
           location: l.location ? String(l.location).trim() : undefined,
           teacher: l.teacher ? String(l.teacher).trim() : undefined,
+          period: Number.isInteger(l.period) && l.period > 0 && l.period < 20 ? l.period : undefined,
         }))
+        // Saat de okunduysa saat önceliklidir; ders numarası sadece saat yoksa kullanılır.
+        .map((l: Lesson) => (l.period && normalizeTime(l.start) && normalizeTime(l.end) ? { ...l, period: undefined } : l))
         .filter((l: Lesson) => l.course);
       return { lessons, notes: parsed?.notes || undefined, model };
     }

@@ -31,6 +31,10 @@ import {
   nextMonday,
   normalizeTime,
   parseDate,
+  PeriodPlan,
+  periodLabel,
+  periodTimes,
+  resolveTimes,
   sortLessons,
   termEnd,
 } from "./src/schedule";
@@ -99,7 +103,9 @@ function Main() {
     if (ready) store.saveSettings(settings);
   }, [settings, ready]);
 
-  const finalLessons = useMemo(() => sortLessons(lessons), [lessons]);
+  const finalLessons = useMemo(() => sortLessons(lessons.map(l => resolveTimes(l, settings.plan))), [lessons, settings.plan]);
+  const maxPeriod = Math.max(0, ...lessons.map(l => l.periodEnd ?? l.period ?? 0));
+  const setPlan = (patch: Partial<PeriodPlan>) => setSettings(s => ({ ...s, plan: { ...s.plan, ...patch } }));
   const problems = finalLessons.filter(l => lessonProblem(l));
   const termStart = parseDate(startText);
 
@@ -142,7 +148,7 @@ function Main() {
         Alert.alert("Ders bulunamadı", out.notes ?? "Fotoğrafta ders programı okunamadı. Daha net, düz bir fotoğraf dene.");
         return;
       }
-      const read = settings.merge ? mergeConsecutive(out.lessons) : sortLessons(out.lessons);
+      const read = settings.merge ? mergeConsecutive(out.lessons, settings.plan) : sortLessons(out.lessons);
       const apply = () => setLessons(read);
       if (lessons.length) {
         Alert.alert("Mevcut liste", `${read.length} ders okundu. Mevcut listeyle ne yapılsın?`, [
@@ -359,8 +365,8 @@ function Main() {
                     </Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.course}>{l.course || "(adsız)"}</Text>
-                      {!!(l.location || l.teacher) && (
-                        <Text style={styles.small}>{[l.location, l.teacher].filter(Boolean).join(" · ")}</Text>
+                      {!!(l.period || l.location || l.teacher) && (
+                        <Text style={styles.small}>{[periodLabel(l), l.location, l.teacher].filter(Boolean).join(" · ")}</Text>
                       )}
                       {problem && <Text style={{ color: C.danger, fontSize: 12 }}>⚠️ {problem}</Text>}
                     </View>
@@ -380,12 +386,47 @@ function Main() {
           <View style={[styles.row, { alignItems: "center", marginTop: 12 }]}>
             <Switch value={settings.merge} onValueChange={merge => {
                 setSettings(s => ({ ...s, merge }));
-                if (merge) setLessons(prev => mergeConsecutive(prev));
+                if (merge) setLessons(prev => mergeConsecutive(prev, settings.plan));
               }}
             />
             <Text style={[styles.p, { flex: 1 }]}>  Art arda gelen aynı dersleri tek etkinlik yap</Text>
           </View>
         </View>
+
+        {maxPeriod > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.h2}>Ders saatleri</Text>
+            <View style={styles.note}>
+              <Text style={{ color: C.warn }}>
+                ⏰ Bu programda saat yazmıyor; dersler sırasına göre okundu. Okulunun ders saatlerini gir, takvimdeki saatler
+                buna göre hesaplanır.
+              </Text>
+            </View>
+            <View style={[styles.row, { marginTop: 4 }]}>
+              <Field label="İlk ders" value={settings.plan.firstStart} onChange={v => setPlan({ firstStart: v })} time />
+              <Field label="Ders (dk)" value={settings.plan.lesson} onChange={v => setPlan({ lesson: +v || 1 })} />
+              <Field label="Teneffüs (dk)" value={settings.plan.brk} onChange={v => setPlan({ brk: +v || 0 })} />
+            </View>
+            <View style={styles.row}>
+              <Field
+                label="Öğle arası kaçıncı dersten sonra (0 = yok)"
+                value={settings.plan.lunchAfter}
+                onChange={v => setPlan({ lunchAfter: +v || 0 })}
+              />
+              <Field label="Öğle arası (dk)" value={settings.plan.lunch} onChange={v => setPlan({ lunch: +v || 0 })} />
+            </View>
+            <View style={styles.periodGrid}>
+              {Array.from({ length: Math.max(maxPeriod, 1) }, (_, i) => {
+                const t = periodTimes(settings.plan, i + 1);
+                return (
+                  <Text key={i} style={styles.periodItem}>
+                    <Text style={{ fontWeight: "700" }}>{i + 1}.</Text> {t.start}–{t.end}
+                  </Text>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.h2}>3. Takvime ekle</Text>
@@ -488,6 +529,11 @@ function LessonEditor({
         <Pressable style={{ flex: 1 }} onPress={onClose} />
         <View style={styles.sheet}>
           <Text style={styles.h2}>Ders</Text>
+          {!!draft.period && (
+            <Text style={styles.small}>
+              {periodLabel(draft)} – saat, “Ders saatleri”nden hesaplanıyor. Saati değiştirirsen bu derse özel saat kullanılır.
+            </Text>
+          )}
           <TextInput style={styles.input} value={draft.course} onChangeText={course => set({ course })} placeholder="Ders adı" />
           <Text style={styles.label}>Gün</Text>
           <View style={[styles.row, { flexWrap: "wrap" }]}>
@@ -531,7 +577,18 @@ function LessonEditor({
           />
           {problem && <Text style={{ color: C.danger, marginTop: 8 }}>⚠️ {problem}</Text>}
           <View style={[styles.row, { marginTop: 16 }]}>
-            <Btn title="Kaydet" onPress={() => onSave(draft)} disabled={!!problem} flex />
+            <Btn
+              title="Kaydet"
+              onPress={() =>
+                onSave(
+                  draft.period && (draft.start !== lesson?.start || draft.end !== lesson?.end)
+                    ? { ...draft, period: undefined, periodEnd: undefined }
+                    : draft,
+                )
+              }
+              disabled={!!problem}
+              flex
+            />
             <Btn title="Sil" kind="danger" onPress={() => onDelete(draft.id)} />
             <Btn title="Vazgeç" kind="ghost" onPress={onClose} />
           </View>
@@ -564,6 +621,26 @@ function Btn({
     >
       <Text style={{ color: fg, fontWeight: "600", fontSize: 15, textAlign: "center" }}>{title}</Text>
     </Pressable>
+  );
+}
+
+function Field({ label, value, onChange, time }: { label: string; value: string | number; onChange: (v: string) => void; time?: boolean }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={[styles.label, { marginBottom: 0 }]} numberOfLines={2}>
+        {label}
+      </Text>
+      <TextInput
+        style={[styles.input, time && !normalizeTime(text) && { borderColor: C.danger }]}
+        value={text}
+        keyboardType={time ? "numbers-and-punctuation" : "number-pad"}
+        onChangeText={setText}
+        onEndEditing={() => onChange(time ? normalizeTime(text) ?? String(value) : text)}
+        onBlur={() => onChange(time ? normalizeTime(text) ?? String(value) : text)}
+      />
+    </View>
   );
 }
 
@@ -629,6 +706,16 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     marginBottom: 6,
     backgroundColor: "#fff",
+  },
+  periodGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, gap: 6 },
+  periodItem: {
+    backgroundColor: "#F8F9FC",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    fontSize: 13,
+    color: C.text,
+    fontVariant: ["tabular-nums"],
   },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
   modalWrap: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },

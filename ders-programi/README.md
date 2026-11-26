@@ -59,8 +59,14 @@ Apple, App Store dışından kurulum için geliştirici imzası ister:
 4. **Takvime ekle** → onayla. Dersler takvimde her hafta tekrarlanır.
 5. Yanlış eklediysen **“Bu uygulamanın eklediği … etkinliği takvimden sil”** ile hepsini geri al.
 
-İpucu: Programı düz, iyi ışıkta ve tüm tabloyu kapsayacak şekilde çek. Programda sadece “1. ders, 2. ders” yazıyor ve
-saat yoksa uygulama varsayılan okul saatleri kullanır ve bunu sarı notla belirtir — saatleri kontrol et.
+İpucu: Programı düz, iyi ışıkta ve tüm tabloyu kapsayacak şekilde çek (ekran görüntüsü / PDF görüntüsü de olur).
+
+**Saat yazmayan programlar** (ör. e-Okul / MEBBİS “Haftalık Ders Çizelgesi”, sadece satır satır dersler): dersler sırasına
+göre (1., 2., … ders) okunur ve ekranda **Ders saatleri** bölümü çıkar. Okulunun düzenini gir: ilk ders başlangıcı, ders
+ve teneffüs süresi, öğle arasının kaçıncı dersten sonra olduğu ve süresi. Varsayılan: 08:30, 40 dk ders, 10 dk teneffüs,
+4. dersten sonra 40 dk öğle arası. Saatler hemen yeniden hesaplanır; arka arkaya gelen aynı dersler (ör. 1.–2. ders)
+tek etkinlik olur, öğle arasının iki yanı birleştirilmez. Bir derse dokunup saatini elle değiştirirsen o derse özel saat kullanılır.
+Etkinlik adına sınıf/şube eklenir (ör. “Birinci Yabancı Dil (İngilizce) – 12/B”), yeri derslik olur.
 
 ## Geliştirme
 

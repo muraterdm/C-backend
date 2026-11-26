@@ -11,7 +11,43 @@ export type Lesson = {
   end: string;
   location?: string;
   teacher?: string;
+  /** Programda saat yoksa: kaçıncı ders (1'den başlar). Saat, ders saatleri planından hesaplanır. */
+  period?: number;
+  /** Birleştirilmiş derslerde son ders numarası */
+  periodEnd?: number;
 };
+
+/** Saat yazmayan programlar için okulun ders saati düzeni */
+export type PeriodPlan = {
+  firstStart: string;
+  /** ders süresi (dk) */
+  lesson: number;
+  /** teneffüs (dk) */
+  brk: number;
+  /** kaçıncı dersten sonra öğle arası (0 = yok) */
+  lunchAfter: number;
+  /** öğle arası (dk) */
+  lunch: number;
+};
+export const DEFAULT_PLAN: PeriodPlan = { firstStart: "08:30", lesson: 40, brk: 10, lunchAfter: 4, lunch: 40 };
+
+const fromMinutes = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/** n. dersin başlangıç ve bitiş saati */
+export function periodTimes(plan: PeriodPlan, n: number): { start: string; end: string } {
+  let t = toMinutes(normalizeTime(plan.firstStart) ?? DEFAULT_PLAN.firstStart);
+  for (let i = 1; i < n; i++) t += plan.lesson + (plan.lunchAfter > 0 && i === plan.lunchAfter ? plan.lunch : plan.brk);
+  return { start: fromMinutes(t), end: fromMinutes(t + plan.lesson) };
+}
+
+/** Ders numarası olan derslerin saatlerini plandan doldurur */
+export function resolveTimes(l: Lesson, plan: PeriodPlan): Lesson {
+  if (!l.period) return l;
+  return { ...l, start: periodTimes(plan, l.period).start, end: periodTimes(plan, l.periodEnd ?? l.period).end };
+}
+
+export const periodLabel = (l: Lesson) =>
+  l.period ? (l.periodEnd && l.periodEnd !== l.period ? `${l.period}.–${l.periodEnd}. ders` : `${l.period}. ders`) : "";
 
 export const DAY_NAMES = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 export const DAY_SHORT = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
@@ -57,29 +93,39 @@ export function lessonProblem(l: Lesson): string | null {
 
 export function sortLessons(list: Lesson[]): Lesson[] {
   return [...list].sort(
-    (a, b) => a.day - b.day || (normalizeTime(a.start) ?? "").localeCompare(normalizeTime(b.start) ?? ""),
+    (a, b) =>
+      a.day - b.day ||
+      (a.period && b.period ? a.period - b.period : 0) ||
+      (normalizeTime(a.start) ?? "").localeCompare(normalizeTime(b.start) ?? ""),
   );
 }
 
-/** Aynı gün, aynı ders ve aynı yerde arka arkaya gelen saatleri (aradaki teneffüs ≤ maxGap dk) tek etkinlik yapar. */
-export function mergeConsecutive(list: Lesson[], maxGap = 15): Lesson[] {
+/**
+ * Aynı gün, aynı ders ve aynı yerde arka arkaya gelen dersleri tek etkinlik yapar.
+ * Ders numaralı programlarda ardışık numaralar birleşir (öğle arasının iki yanı hariç);
+ * saatli programlarda aradaki teneffüs ≤ maxGap dk olmalı.
+ */
+export function mergeConsecutive(list: Lesson[], plan: PeriodPlan = DEFAULT_PLAN, maxGap = 15): Lesson[] {
+  const norm = (x?: string) => (x ?? "").trim().toLocaleLowerCase("tr");
   const out: Lesson[] = [];
   for (const l of sortLessons(list)) {
     const prev = out[out.length - 1];
-    const s = normalizeTime(l.start);
-    const pe = prev && normalizeTime(prev.end);
-    if (
-      prev &&
-      s &&
-      pe &&
-      prev.day === l.day &&
-      prev.course.trim().toLocaleLowerCase("tr") === l.course.trim().toLocaleLowerCase("tr") &&
-      (prev.location ?? "").trim() === (l.location ?? "").trim() &&
-      toMinutes(s) - toMinutes(pe) >= 0 &&
-      toMinutes(s) - toMinutes(pe) <= maxGap
-    ) {
-      out[out.length - 1] = { ...prev, end: l.end };
-    } else out.push({ ...l });
+    const same = prev && prev.day === l.day && norm(prev.course) === norm(l.course) && norm(prev.location) === norm(l.location);
+    if (same && prev.period && l.period) {
+      const last = prev.periodEnd ?? prev.period;
+      if (l.period === last + 1 && !(plan.lunchAfter > 0 && last === plan.lunchAfter)) {
+        out[out.length - 1] = { ...prev, periodEnd: l.periodEnd ?? l.period };
+        continue;
+      }
+    } else if (same && !prev.period && !l.period) {
+      const s = normalizeTime(l.start);
+      const pe = normalizeTime(prev.end);
+      if (s && pe && toMinutes(s) - toMinutes(pe) >= 0 && toMinutes(s) - toMinutes(pe) <= maxGap) {
+        out[out.length - 1] = { ...prev, end: l.end };
+        continue;
+      }
+    }
+    out.push({ ...l });
   }
   return out;
 }
