@@ -106,7 +106,13 @@
 
   <section class="card" id="install" hidden>
     <h2>📲 Ana ekrana ekle</h2>
-    <p>Uygulama gibi simgesiyle açmak için: Safari'de alttaki <b>Paylaş</b> düğmesine (kare ve yukarı ok) dokun → <b>Ana Ekrana Ekle</b> → <b>Ekle</b>.</p>
+    <p>Bu kart kendisi eklemez; iPhone'da bunu Safari menüsünden yapman gerekir:</p>
+    <ol class="steps">
+      <li>Adres çubuğundaki <b>≡</b> (üç çizgi) ya da <b>•••</b> düğmesine dokun. Eski iPhone'larda doğrudan alttaki <b>Paylaş</b> (kare ve yukarı ok) düğmesine dokun.</li>
+      <li><b>Paylaş</b>'a dokun, açılan listeyi aşağı kaydır.</li>
+      <li><b>Ana Ekrana Ekle</b>'yi seç. “Web uygulaması olarak aç” varsa açık kalsın → <b>Ekle</b>.</li>
+    </ol>
+    <p class="small">Listede “Ana Ekrana Ekle” yoksa: en alttaki <b>Eylemleri Düzenle</b>'den ekleyebilirsin. Sayfa Safari'de değil de başka bir uygulamanın içinde açıldıysa önce <b>Safari'de aç</b>.</p>
     <button class="link" id="installClose">Tamam, kapat</button>
   </section>
 
@@ -623,13 +629,13 @@ $("edDays").onclick = e => { const b = e.target.closest("[data-d]"); if (b) { ed
 $("edSave").onclick = saveEditor;
 $("edCancel").onclick = () => $("editor").close();
 $("edDelete").onclick = () => { lessons = lessons.filter(l => l.id !== editing.id); save(); render(); $("editor").close(); };
-$("installClose").onclick = () => { $("install").hidden = true; store.set("dp_install_seen", true); };
+$("installClose").onclick = () => { $("install").hidden = true; store.set("dp_install_seen2", true); };
 
 // ---------- başlangıç ----------
 $("start").value = store.get("dp_start", "") || ymd(new Date());
 fillPlanInputs();
 if (!apiKey) openSettings();
-if (isIOS && !isStandalone() && !store.get("dp_install_seen", false)) $("install").hidden = false;
+if (isIOS && !isStandalone() && !store.get("dp_install_seen2", false)) $("install").hidden = false;
 render();
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW kaydı başarısız", err));
