@@ -53,6 +53,10 @@
   button:disabled { opacity: .45; }
   input, select { font: inherit; width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px;
     background: var(--input); color: var(--text); min-width: 0; }
+  /* iPhone Safari: tarih/saat kutuları kendi genişliğini dayatıp kartın dışına taşmasın */
+  input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; display: block;
+    max-width: 100%; min-height: 46px; text-align: left; }
+  input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; }
   input.bad { border-color: var(--danger); }
   label.lbl { display: block; color: var(--muted); font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
   .note { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 12px; margin-top: 12px; font-size: 14px; }
