@@ -4,7 +4,9 @@ Aylık nöbet listesinin fotoğrafından, **İsim** alanına yazılan ya da list
 
 Canlı adres (GitHub Pages açıldıysa): https://muraterdm.github.io/C-backend/
 
-> 📅 **Yeni:** Ders programı fotoğrafını okuyup telefon takvimine ekleyen Android/iOS uygulaması: [`ders-programi/`](ders-programi/README.md)
+> 📅 **Yeni – Ders Programı:** ders programının fotoğrafını okuyup dersleri her hafta tekrarlayan etkinlik olarak telefon takvimine ekler.
+> - **iPhone / Android, kurulumsuz (PWA):** https://muraterdm.github.io/C-backend/ders/ → Safari'de **Paylaş → Ana Ekrana Ekle**. Kod: [`ders/`](ders/index.html)
+> - **Native uygulama (Expo):** [`ders-programi/`](ders-programi/README.md) – Android APK GitHub Actions ile ücretsiz derlenir.
 
 ## Telefona yükleme
 

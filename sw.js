@@ -17,6 +17,8 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;                       // Claude API (POST) dokunulmaz
   const url = new URL(req.url);
+  // Ders Programı (ders/) kendi service worker'ını kullanır
+  if (url.origin === location.origin && url.pathname.includes("/ders/")) return;
 
   // Takvim dosyası: içerik adresin içinde gelir, gerçek bir .ics yanıtı olarak sunulur.
   // iPhone bu yanıtı görünce "Tümünü Ekle" takvim ekranını açar.

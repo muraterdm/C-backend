@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ders Programı</title>
+<meta name="description" content="Ders programının fotoğrafını okuyup dersleri telefon takvimine ekler.">
+<meta name="theme-color" content="#3559E0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ders Programı">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #F4F6FB; --card: #FFFFFF; --text: #1B2333; --muted: #6B7385; --primary: #3559E0;
+    --primary-soft: #E6ECFD; --danger: #D64545; --danger-soft: #FDECEC; --border: #E1E5EE;
+    --warn: #8A5A12; --warn-soft: #FFF6E5; --row: #F8F9FC; --input: #FAFBFD;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F131C; --card: #181D29; --text: #E8ECF4; --muted: #98A0B3; --primary: #6E8BFF;
+      --primary-soft: #232C47; --danger: #FF7070; --danger-soft: #3A2024; --border: #2A3142;
+      --warn: #F2C36B; --warn-soft: #2E2715; --row: #1E2433; --input: #141925;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto;
+    padding: calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 40px); }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  header img { width: 44px; height: 44px; border-radius: 11px; }
+  h1 { font-size: 24px; margin: 0; line-height: 1.15; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .gear { margin-left: auto; background: none; border: 0; font-size: 24px; padding: 6px; cursor: pointer; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 17px; margin: 0 0 10px; }
+  p { margin: 0 0 8px; }
+  .small { color: var(--muted); font-size: 13px; }
+  a { color: var(--primary); font-weight: 600; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row > .grow { flex: 1 1 0; min-width: 0; }
+  button, .btn { font: inherit; font-weight: 600; border: 0; border-radius: 12px; padding: 12px 16px; cursor: pointer;
+    background: var(--primary); color: #fff; text-align: center; display: inline-block; }
+  button.soft, .btn.soft { background: var(--primary-soft); color: var(--primary); }
+  button.ghost { background: transparent; color: var(--muted); }
+  button.danger { background: var(--danger-soft); color: var(--danger); }
+  button.link { background: none; padding: 4px 0; color: var(--primary); }
+  button.link.red { color: var(--danger); }
+  button:disabled { opacity: .45; }
+  input, select { font: inherit; width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--input); color: var(--text); min-width: 0; }
+  input.bad { border-color: var(--danger); }
+  label.lbl { display: block; color: var(--muted); font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+  .note { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 12px; margin-top: 12px; font-size: 14px; }
+  .photo { width: 100%; max-height: 240px; object-fit: contain; margin-top: 12px; border-radius: 10px; background: var(--row); }
+  .spin { display: inline-block; width: 18px; height: 18px; border: 3px solid var(--primary-soft); border-top-color: var(--primary);
+    border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -4px; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .day { font-weight: 700; color: var(--primary); margin: 14px 0 6px; }
+  .lesson { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; margin-bottom: 6px; border-radius: 10px;
+    background: var(--row); color: var(--text); font-weight: 400; text-align: left; }
+  .lesson.bad { background: var(--danger-soft); }
+  .lesson .t { width: 48px; flex: none; font-size: 13px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; line-height: 1.3; }
+  .lesson .c { flex: 1; min-width: 0; }
+  .lesson .n { font-weight: 600; }
+  .lesson .m { font-size: 12px; color: var(--muted); }
+  .lesson .e { font-size: 12px; color: var(--danger); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 20px; padding: 7px 12px; font-weight: 500; font-size: 14px; }
+  .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .switch { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .switch input { width: 22px; height: 22px; flex: none; accent-color: var(--primary); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .grid3 label.lbl, .grid2 label.lbl { min-height: 34px; display: flex; align-items: flex-end; }
+  .periods { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .periods span { background: var(--row); border-radius: 8px; padding: 5px 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .stepper { display: flex; align-items: center; gap: 8px; }
+  .stepper b { min-width: 80px; text-align: center; }
+  .big { width: 100%; margin-top: 16px; font-size: 17px; padding: 14px; }
+  .steps { margin: 8px 0 0; padding-left: 20px; }
+  .steps li { margin-bottom: 4px; }
+  dialog { border: 0; border-radius: 20px; padding: 20px; width: min(560px, calc(100vw - 24px)); background: var(--card); color: var(--text); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/icon-192.png" alt="">
+    <div>
+      <h1>Ders Programı</h1>
+      <div class="sub">Fotoğraftan telefon takvimine</div>
+    </div>
+    <button class="gear" id="gear" aria-label="Ayarlar">⚙️</button>
+  </header>
+
+  <section class="card" id="install" hidden>
+    <h2>📲 Ana ekrana ekle</h2>
+    <p>Uygulama gibi simgesiyle açmak için: Safari'de alttaki <b>Paylaş</b> düğmesine (kare ve yukarı ok) dokun → <b>Ana Ekrana Ekle</b> → <b>Ekle</b>.</p>
+    <button class="link" id="installClose">Tamam, kapat</button>
+  </section>
+
+  <section class="card" id="settings" hidden>
+    <h2>Gemini API anahtarı (ücretsiz)</h2>
+    <ol class="steps">
+      <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey ↗</a> adresini aç, Google hesabınla giriş yap.</li>
+      <li><b>Create API key</b>'e dokun, <b>AIza…</b> ile başlayan anahtarı kopyala (kredi kartı gerekmez).</li>
+      <li>Aşağıya yapıştırıp kaydet.</li>
+    </ol>
+    <input id="key" placeholder="AIza…" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:8px">
+    <div class="row" style="margin-top:10px">
+      <button id="saveKey">Kaydet</button>
+      <button class="ghost" id="closeSettings">Kapat</button>
+    </div>
+    <p class="small" style="margin-top:10px">Anahtar yalnızca bu telefonda saklanır ve sadece Google'a gönderilir. Ücretsiz katmanda gönderilen fotoğraflar Google tarafından ürün geliştirmede kullanılabilir.</p>
+  </section>
+
+  <section class="card">
+    <h2>1. Ders programının fotoğrafı</h2>
+    <div class="row">
+      <label class="btn grow" for="cam">📷 Kamera</label>
+      <label class="btn soft grow" for="lib">🖼️ Galeri</label>
+    </div>
+    <input type="file" id="cam" accept="image/*" capture="environment" hidden>
+    <input type="file" id="lib" accept="image/*" hidden>
+    <img class="photo" id="photo" alt="" hidden>
+    <p id="status" class="small" style="margin-top:12px" hidden></p>
+    <div class="note" id="notes" hidden></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">2. Dersleri kontrol et</h2>
+      <button class="link red" id="clear" hidden>Temizle</button>
+    </div>
+    <p class="small" id="empty" style="margin-top:8px">Fotoğraf seçince okunan dersler burada listelenir. Elle de ekleyebilirsin.</p>
+    <div id="list"></div>
+    <button class="soft" id="addLesson" style="margin-top:12px">＋ Ders ekle</button>
+    <label class="switch"><input type="checkbox" id="merge"> <span>Art arda gelen aynı dersleri tek etkinlik yap</span></label>
+  </section>
+
+  <section class="card" id="planCard" hidden>
+    <h2>Ders saatleri</h2>
+    <div class="note" style="margin-top:0">⏰ Bu programda saat yazmıyor; dersler sırasına göre okundu. Okulunun ders saatlerini gir, takvimdeki saatler buna göre hesaplanır.</div>
+    <div class="grid3">
+      <div><label class="lbl" for="pStart">İlk ders</label><input id="pStart" type="time"></div>
+      <div><label class="lbl" for="pLesson">Ders (dk)</label><input id="pLesson" type="number" inputmode="numeric" min="1"></div>
+      <div><label class="lbl" for="pBrk">Teneffüs (dk)</label><input id="pBrk" type="number" inputmode="numeric" min="0"></div>
+    </div>
+    <div class="grid2">
+      <div><label class="lbl" for="pLunchAfter">Öğle arası kaçıncı dersten sonra (0 = yok)</label><input id="pLunchAfter" type="number" inputmode="numeric" min="0"></div>
+      <div><label class="lbl" for="pLunch">Öğle arası (dk)</label><input id="pLunch" type="number" inputmode="numeric" min="0"></div>
+    </div>
+    <div class="periods" id="periods"></div>
+  </section>
+
+  <section class="card">
+    <h2>3. Takvime ekle</h2>
+    <label class="lbl" for="start">Başlangıç tarihi</label>
+    <input type="date" id="start">
+    <label class="lbl">Kaç hafta tekrarlansın?</label>
+    <div class="stepper">
+      <button class="soft" id="wMinus" aria-label="Azalt">−</button>
+      <b id="weeks"></b>
+      <button class="soft" id="wPlus" aria-label="Artır">＋</button>
+    </div>
+    <p class="small" id="endInfo" style="margin-top:6px"></p>
+    <label class="lbl">Hatırlatma</label>
+    <div class="chips" id="reminders"></div>
+    <button class="big" id="addCal" disabled>📅 Takvime ekle</button>
+    <div id="exportPanel" hidden>
+      <p class="small" id="exportHint" style="margin-top:12px"></p>
+      <div class="row" style="margin-top:8px">
+        <button class="soft grow" id="expAgain">Takvim ekranını tekrar aç</button>
+        <button class="soft grow" id="expShare">Dosyayı paylaş / kaydet</button>
+      </div>
+      <p class="small" style="margin-top:10px">💡 İpucu: Takvim uygulamasında önce “Ders Programı” adında yeni bir takvim oluşturup dersleri ona eklersen, dönem bitince o takvimi silerek hepsini tek seferde kaldırabilirsin.</p>
+    </div>
+  </section>
+</main>
+
+<dialog id="editor">
+  <h2>Ders</h2>
+  <p class="small" id="edPeriod" hidden></p>
+  <input id="edCourse" placeholder="Ders adı">
+  <label class="lbl">Gün</label>
+  <div class="chips" id="edDays"></div>
+  <div class="grid2">
+    <div><label class="lbl" for="edStart">Başlangıç</label><input id="edStart" type="time"></div>
+    <div><label class="lbl" for="edEnd">Bitiş</label><input id="edEnd" type="time"></div>
+  </div>
+  <input id="edLoc" placeholder="Derslik (isteğe bağlı)" style="margin-top:10px">
+  <input id="edTeacher" placeholder="Öğretmen (isteğe bağlı)" style="margin-top:8px">
+  <p class="small" id="edErr" style="color:var(--danger);margin-top:8px" hidden></p>
+  <div class="row" style="margin-top:16px">
+    <button class="grow" id="edSave">Kaydet</button>
+    <button class="danger" id="edDelete">Sil</button>
+    <button class="ghost" id="edCancel">Vazgeç</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const DAY_NAMES = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+const DAY_SHORT = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+const REMINDERS = [0, 5, 10, 15, 30, 60];
+const DEFAULT_PLAN = { firstStart: "08:30", lesson: 40, brk: 10, lunchAfter: 4, lunch: 40 };
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isAndroid = /android/i.test(navigator.userAgent);
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+
+// ---------- depolama ----------
+const store = {
+  get(k, fb) { try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); } catch { return fb; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let apiKey = store.get("dp_key", "");
+let lessons = store.get("dp_lessons", []);
+let settings = Object.assign({ weeks: 14, reminder: 10, merge: true }, store.get("dp_settings", {}));
+settings.plan = Object.assign({}, DEFAULT_PLAN, settings.plan);
+const save = () => { store.set("dp_lessons", lessons); store.set("dp_settings", settings); };
+let idc = 0;
+const newId = () => Date.now().toString(36) + "-" + (idc++).toString(36);
+
+// ---------- saat / tarih ----------
+function normalizeTime(raw) {
+  if (raw == null || raw === "") return null;
+  const s = String(raw).trim().replace(/[.,;h]/g, ":");
+  let m, h, mi;
+  if ((m = s.match(/^(\d{1,2}):(\d{1,2})$/))) { h = +m[1]; mi = +m[2]; }
+  else if ((m = s.match(/^(\d{1,2})(\d{2})$/))) { h = +m[1]; mi = +m[2]; }
+  else if ((m = s.match(/^(\d{1,2})$/))) { h = +m[1]; mi = 0; }
+  else return null;
+  if (h > 23 || mi > 59) return null;
+  return `${pad(h)}:${pad(mi)}`;
+}
+const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const fromMin = m => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+function periodTimes(plan, n) {
+  let t = toMin(normalizeTime(plan.firstStart) || DEFAULT_PLAN.firstStart);
+  for (let i = 1; i < n; i++) t += plan.lesson + (plan.lunchAfter > 0 && i === plan.lunchAfter ? plan.lunch : plan.brk);
+  return { start: fromMin(t), end: fromMin(t + plan.lesson) };
+}
+const resolve = l => l.period
+  ? { ...l, start: periodTimes(settings.plan, l.period).start, end: periodTimes(settings.plan, l.periodEnd || l.period).end }
+  : l;
+const periodLabel = l => !l.period ? "" : (l.periodEnd && l.periodEnd !== l.period ? `${l.period}.–${l.periodEnd}. ders` : `${l.period}. ders`);
+function problem(l) {
+  if (!String(l.course || "").trim()) return "Ders adı boş";
+  if (!(l.day >= 1 && l.day <= 7)) return "Gün seçilmedi";
+  const s = normalizeTime(l.start), e = normalizeTime(l.end);
+  if (!s) return "Başlangıç saati eksik";
+  if (!e) return "Bitiş saati eksik";
+  if (toMin(e) <= toMin(s)) return "Bitiş, başlangıçtan sonra olmalı";
+  return null;
+}
+const sortLessons = list => [...list].sort((a, b) =>
+  a.day - b.day || (a.period && b.period ? a.period - b.period : 0) ||
+  (normalizeTime(a.start) || "").localeCompare(normalizeTime(b.start) || ""));
+function mergeConsecutive(list, maxGap = 15) {
+  const norm = x => String(x || "").trim().toLocaleLowerCase("tr");
+  const plan = settings.plan, out = [];
+  for (const l of sortLessons(list)) {
+    const prev = out[out.length - 1];
+    const same = prev && prev.day === l.day && norm(prev.course) === norm(l.course) && norm(prev.location) === norm(l.location);
+    if (same && prev.period && l.period) {
+      const last = prev.periodEnd || prev.period;
+      if (l.period === last + 1 && !(plan.lunchAfter > 0 && last === plan.lunchAfter)) {
+        out[out.length - 1] = { ...prev, periodEnd: l.periodEnd || l.period }; continue;
+      }
+    } else if (same && !prev.period && !l.period) {
+      const s = normalizeTime(l.start), pe = normalizeTime(prev.end);
+      if (s && pe && toMin(s) - toMin(pe) >= 0 && toMin(s) - toMin(pe) <= maxGap) {
+        out[out.length - 1] = { ...prev, end: l.end }; continue;
+      }
+    }
+    out.push({ ...l });
+  }
+  return out;
+}
+const isoDay = d => ((d.getDay() + 6) % 7) + 1;
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmt = d => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+const parseYmd = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+function firstOccurrence(start, day, time) {
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  d.setDate(d.getDate() + ((day - isoDay(d) + 7) % 7));
+  const [h, m] = time.split(":").map(Number);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+function termEnd(start, weeks) {
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  d.setDate(d.getDate() + weeks * 7 - 1);
+  return d;
+}
+
+// ---------- Gemini ----------
+const MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+const PROMPT = `Bu fotoğraf bir haftalık ders programı (okul / üniversite / kurs; öğrenci ya da öğretmen programı olabilir).
+Programdaki HER dolu ders hücresini ayrı bir kayıt olarak çıkar.
+
+Kurallar:
+- day: haftanın günü, 1=Pazartesi, 2=Salı, 3=Çarşamba, 4=Perşembe, 5=Cuma, 6=Cumartesi, 7=Pazar.
+  Gün adları kısaltılmış (Pzt, Sa, Çrş, Prş, Cu, Cmt, Pz) veya İngilizce (Mon, Tue…) olabilir.
+- SAATLER: Programda saatler yazıyorsa start / end alanlarına 24 saat biçiminde "HH:MM" olarak yaz, period'u boş bırak.
+  Programda saat YOKSA (sadece satırlar ya da "1. ders, 2. ders" gibi numaralar varsa) ASLA saat uydurma:
+  start / end boş kalsın, period alanına hücrenin kaçıncı ders satırında olduğunu yaz (en üstteki ders satırı = 1).
+  Satır numarasını sayarken boş satırları da say: ör. Perşembe sütununda ilk dolu hücre 5. satırdaysa period = 5.
+- course: dersin adı, düzgün yazımla (TAMAMEN BÜYÜK HARF yazılmışsa Türkçe kurallarıyla sadece baş harfleri büyük yap,
+  ör. "BİRİNCİ YABANCI DİL (İNGİLİZCE)" → "Birinci Yabancı Dil (İngilizce)").
+  Hücrede sınıf / şube bilgisi varsa kısaca sona ekle: "AL - 11. Sınıf / F Şubesi" → "Seçmeli Yabancı Dil – 11/F".
+- location: derslik ve varsa bina, kısa haliyle (ör. "K216 Derslik · Harput Anadolu Lisesi Binası"); yoksa boş.
+- teacher: hücrede öğretmen adı yazıyorsa onu yaz; yoksa boş (başlıktaki programın sahibini her derse yazma).
+- Boş hücreleri, "öğle arası", "teneffüs", "boş" gibi ders olmayan hücreleri ATLA.
+- Birleştirilmiş (birden fazla satıra yayılan) hücre: saatliyse tek kayıt (ilk başlangıç–son bitiş);
+  numaralıysa kapladığı her satır için ayrı kayıt yaz.
+- Okuyamadığın veya emin olmadığın şeyleri notes alanına kısaca Türkçe yaz; her şey netse notes boş kalsın.
+- Fotoğraf ders programı değilse lessons boş liste olsun ve notes'ta nedenini söyle.`;
+const SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    lessons: { type: "ARRAY", items: { type: "OBJECT", properties: {
+      course: { type: "STRING" }, day: { type: "INTEGER" }, start: { type: "STRING" }, end: { type: "STRING" },
+      period: { type: "INTEGER" }, location: { type: "STRING" }, teacher: { type: "STRING" } },
+      required: ["course", "day"] } },
+    notes: { type: "STRING" },
+  },
+  required: ["lessons"],
+};
+async function readSchedule(base64) {
+  let lastError = "";
+  for (const model of MODELS) {
+    let res, body;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ inline_data: { mime_type: "image/jpeg", data: base64 } }, { text: PROMPT }] }],
+          generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: SCHEMA },
+        }),
+      });
+      body = await res.json().catch(() => null);
+    } catch {
+      throw new Error("İnternet bağlantısı kurulamadı. Bağlantını kontrol edip tekrar dene.");
+    }
+    if (res.ok) {
+      const text = (body?.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+      if (!text) { lastError = body?.promptFeedback?.blockReason ? `Gemini fotoğrafı işlemeyi reddetti (${body.promptFeedback.blockReason}).` : "Gemini boş yanıt döndürdü."; continue; }
+      let parsed;
+      try { parsed = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")); } catch { lastError = "Gemini yanıtı okunamadı."; continue; }
+      const list = (Array.isArray(parsed?.lessons) ? parsed.lessons : []).map(l => {
+        const start = normalizeTime(l.start) || "", end = normalizeTime(l.end) || "";
+        const period = Number.isInteger(l.period) && l.period > 0 && l.period < 20 && !(start && end) ? l.period : undefined;
+        return { id: newId(), course: String(l.course || "").trim(), day: Number(l.day), start, end, period,
+                 location: l.location ? String(l.location).trim() : "", teacher: l.teacher ? String(l.teacher).trim() : "" };
+      }).filter(l => l.course);
+      return { lessons: list, notes: parsed?.notes || "" };
+    }
+    const msg = body?.error?.message || `HTTP ${res.status}`;
+    if (res.status === 400 && /api key|API_KEY/i.test(msg)) throw new Error("API anahtarı geçersiz. ⚙️ simgesinden anahtarı kontrol et.");
+    if (res.status === 403) throw new Error("API anahtarı reddedildi: " + msg);
+    lastError = res.status === 429 ? "Ücretsiz kota doldu, biraz bekleyip tekrar dene." : msg;
+  }
+  throw new Error(lastError || "Fotoğraf okunamadı.");
+}
+
+// Fotoğrafı küçült ve JPEG'e çevir (iPhone HEIC dahil) → base64
+async function toJpegBase64(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => fail(new Error("Fotoğraf açılamadı.")); i.src = url; });
+    const max = 2200, scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.85).split(",")[1];
+  } finally { URL.revokeObjectURL(url); }
+}
+
+async function onPhoto(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (!apiKey) { openSettings(); alert("Önce ücretsiz Gemini API anahtarını gir."); return; }
+  $("photo").src = URL.createObjectURL(file); $("photo").hidden = false;
+  $("notes").hidden = true;
+  setStatus('<span class="spin"></span>Program okunuyor… (10–30 sn)');
+  try {
+    const out = await readSchedule(await toJpegBase64(file));
+    if (out.notes) { $("notes").textContent = "ℹ️ " + out.notes; $("notes").hidden = false; }
+    if (!out.lessons.length) { setStatus("Fotoğrafta ders bulunamadı. Daha net, düz bir fotoğraf dene."); return; }
+    const read = settings.merge ? mergeConsecutive(out.lessons) : sortLessons(out.lessons);
+    if (lessons.length && !confirm(`${read.length} ders okundu. Mevcut listenin yerine geçsin mi?\n(İptal: mevcut listeye eklenir)`)) {
+      lessons = sortLessons([...lessons, ...read]);
+    } else lessons = read;
+    setStatus(`✅ ${read.length} ders okundu. Aşağıda kontrol et.`);
+    save(); render();
+  } catch (err) {
+    setStatus("⚠️ " + (err.message || err));
+  }
+}
+function setStatus(html) { $("status").innerHTML = html; $("status").hidden = !html; }
+
+// ---------- görünüm ----------
+function render() {
+  const final = sortLessons(lessons.map(resolve));
+  $("empty").hidden = final.length > 0;
+  $("clear").hidden = !lessons.length;
+  let html = "";
+  const groups = DAY_NAMES.map((n, i) => ({ n, items: final.filter(l => l.day === i + 1) })).filter(g => g.items.length);
+  const noDay = final.filter(l => !(l.day >= 1 && l.day <= 7));
+  if (noDay.length) groups.push({ n: "Gün seçilmedi", items: noDay });
+  for (const g of groups) {
+    html += `<div class="day">${g.n}</div>`;
+    for (const l of g.items) {
+      const p = problem(l);
+      const meta = [periodLabel(l), l.location, l.teacher].filter(Boolean).join(" · ");
+      html += `<button class="lesson${p ? " bad" : ""}" data-id="${esc(l.id)}">
+        <span class="t">${esc(l.start || "--:--")}<br>${esc(l.end || "--:--")}</span>
+        <span class="c"><span class="n">${esc(l.course || "(adsız)")}</span>
+        ${meta ? `<br><span class="m">${esc(meta)}</span>` : ""}${p ? `<br><span class="e">⚠️ ${esc(p)}</span>` : ""}</span>
+        <span class="m">›</span></button>`;
+    }
+  }
+  $("list").innerHTML = html;
+  $("merge").checked = settings.merge;
+
+  const maxPeriod = Math.max(0, ...lessons.map(l => l.periodEnd || l.period || 0));
+  $("planCard").hidden = maxPeriod === 0;
+  if (maxPeriod) {
+    $("periods").innerHTML = Array.from({ length: maxPeriod }, (_, i) => {
+      const t = periodTimes(settings.plan, i + 1);
+      return `<span><b>${i + 1}.</b> ${t.start}–${t.end}</span>`;
+    }).join("");
+  }
+
+  $("weeks").textContent = `${settings.weeks} hafta`;
+  const start = parseYmd($("start").value);
+  $("endInfo").textContent = start ? `Son ders haftası: ${fmt(termEnd(start, settings.weeks))} tarihine kadar` : "Başlangıç tarihi seç";
+  $("reminders").innerHTML = REMINDERS.map(r =>
+    `<button class="chip${settings.reminder === r ? " on" : ""}" data-r="${r}">${r ? r + " dk önce" : "Yok"}</button>`).join("");
+  $("addCal").disabled = !final.length;
+  $("addCal").textContent = final.length ? `📅 ${final.length} dersi takvime ekle` : "📅 Takvime ekle";
+}
+
+function fillPlanInputs() {
+  const p = settings.plan;
+  $("pStart").value = normalizeTime(p.firstStart) || "08:30";
+  $("pLesson").value = p.lesson; $("pBrk").value = p.brk; $("pLunchAfter").value = p.lunchAfter; $("pLunch").value = p.lunch;
+}
+function readPlanInputs() {
+  const n = (id, min) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) && v >= min ? v : null; };
+  const p = settings.plan;
+  p.firstStart = normalizeTime($("pStart").value) || p.firstStart;
+  p.lesson = n("pLesson", 1) ?? p.lesson;
+  p.brk = n("pBrk", 0) ?? p.brk;
+  p.lunchAfter = n("pLunchAfter", 0) ?? p.lunchAfter;
+  p.lunch = n("pLunch", 0) ?? p.lunch;
+  save(); render();
+}
+
+// ---------- düzenleme ----------
+let editing = null;
+function openEditor(lesson) {
+  editing = lesson;
+  const r = resolve(lesson);
+  $("edCourse").value = r.course || "";
+  $("edStart").value = normalizeTime(r.start) || "";
+  $("edEnd").value = normalizeTime(r.end) || "";
+  $("edLoc").value = r.location || "";
+  $("edTeacher").value = r.teacher || "";
+  $("edPeriod").hidden = !r.period;
+  $("edPeriod").textContent = r.period ? `${periodLabel(r)} – saat, “Ders saatleri”nden hesaplanıyor. Saati değiştirirsen bu derse özel saat kullanılır.` : "";
+  editing._day = r.day;
+  renderDays();
+  $("edErr").hidden = true;
+  $("editor").showModal();
+}
+function renderDays() {
+  $("edDays").innerHTML = DAY_SHORT.map((d, i) => `<button class="chip${editing._day === i + 1 ? " on" : ""}" data-d="${i + 1}">${d}</button>`).join("");
+}
+function saveEditor() {
+  const r = resolve(editing);
+  const draft = {
+    id: editing.id, course: $("edCourse").value.trim(), day: editing._day,
+    start: normalizeTime($("edStart").value) || "", end: normalizeTime($("edEnd").value) || "",
+    location: $("edLoc").value.trim(), teacher: $("edTeacher").value.trim(),
+    period: editing.period, periodEnd: editing.periodEnd,
+  };
+  if (draft.period && (draft.start !== normalizeTime(r.start) || draft.end !== normalizeTime(r.end))) {
+    draft.period = undefined; draft.periodEnd = undefined;
+  }
+  const p = problem(resolve(draft));
+  if (p) { $("edErr").textContent = "⚠️ " + p; $("edErr").hidden = false; return; }
+  const i = lessons.findIndex(l => l.id === draft.id);
+  if (i >= 0) lessons[i] = draft; else lessons.push(draft);
+  lessons = sortLessons(lessons);
+  save(); render(); $("editor").close();
+}
+
+// ---------- takvim (.ics) ----------
+const icsText = s => String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+const icsLocal = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+function fold(line) {                      // RFC 5545: satırlar 75 baytı geçmesin (UTF-8 karakter bölünmeden)
+  const enc = new TextEncoder(), out = [];
+  let cur = "", bytes = 0;
+  for (const ch of line) {
+    const b = enc.encode(ch).length;
+    if (bytes + b > (out.length ? 74 : 75)) { out.push(cur); cur = ""; bytes = 0; }
+    cur += ch; bytes += b;
+  }
+  out.push(cur);
+  return out.join("\r\n ");
+}
+function buildIcs(list, start) {
+  const until = termEnd(start, settings.weeks); until.setHours(23, 59, 59);
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Ders Programi//TR", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Ders Programı"];
+  list.forEach((l, i) => {
+    const s = firstOccurrence(start, l.day, normalizeTime(l.start));
+    const e = firstOccurrence(start, l.day, normalizeTime(l.end));
+    lines.push("BEGIN:VEVENT",
+      `UID:${ymd(start).replace(/-/g, "")}-${i}-${l.day}-${normalizeTime(l.start).replace(":", "")}@ders-programi`,
+      `DTSTAMP:${stamp}`, `DTSTART:${icsLocal(s)}`, `DTEND:${icsLocal(e)}`,
+      `RRULE:FREQ=WEEKLY;UNTIL=${icsLocal(until).slice(0, 9)}235959`,
+      `SUMMARY:${icsText(l.course)}`);
+    if (l.location) lines.push(`LOCATION:${icsText(l.location)}`);
+    lines.push(`DESCRIPTION:${icsText([l.teacher && "Öğretmen: " + l.teacher, periodLabel(l), "Ders Programı uygulamasıyla eklendi"].filter(Boolean).join("\n"))}`);
+    if (settings.reminder > 0) lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsText(l.course)}`, `TRIGGER:-PT${settings.reminder}M`, "END:VALARM");
+    lines.push("END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");
+  return lines.map(fold).join("\r\n") + "\r\n";
+}
+
+let lastIcs = "";
+function exportCalendar() {
+  const final = sortLessons(lessons.map(resolve));
+  const bad = final.filter(problem);
+  if (bad.length) { alert(`${bad.length} derste eksik bilgi var (kırmızı). Derse dokunup düzelt.`); return; }
+  const start = parseYmd($("start").value);
+  if (!start) { alert("Başlangıç tarihini seç."); return; }
+  if (!confirm(`${final.length} ders, ${fmt(start)} – ${fmt(termEnd(start, settings.weeks))} arasında her hafta tekrarlanacak.` +
+               (settings.reminder ? `\nHatırlatma: ${settings.reminder} dk önce` : "") + "\n\nDevam edilsin mi?")) return;
+  lastIcs = buildIcs(final, start);
+  $("exportPanel").hidden = false;
+  $("expAgain").hidden = !isIOS;
+  $("exportHint").innerHTML = isIOS
+    ? (isStandalone()
+        ? "Açılan ekranda <b>Tümünü Ekle</b>'ye bas ve takvimi seç. Ekran boş kalırsa “Dosyayı paylaş / kaydet” → <b>Takvim</b>'i dene ya da aynı adresi <b>Safari</b>'de açıp orada ekle."
+        : "Açılan ekranda <b>Tümünü Ekle</b>'ye bas ve takvimi seç.")
+    : isAndroid
+      ? "İndirilen <b>ders-programi.ics</b> dosyasına dokun ve <b>Takvim</b> uygulamasını seç (Samsung Takvim, Google Takvim…), sonra <b>Kaydet / İçe aktar</b>."
+      : "İndirilen dosyayı aç ya da Google Takvim'de Ayarlar → İçe aktar ile yükle.";
+  if (isIOS) openAppleCalendar(); else downloadIcs();
+  $("exportPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+function openAppleCalendar() {
+  if (!navigator.serviceWorker || !navigator.serviceWorker.controller) { shareIcs(); return; }
+  const bytes = new TextEncoder().encode(lastIcs);
+  let bin = ""; bytes.forEach(b => bin += String.fromCharCode(b));
+  location.href = "takvim.ics?d=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function downloadIcs() {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lastIcs], { type: "text/calendar" }));
+  a.download = "ders-programi.ics";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function shareIcs() {
+  const file = new File([lastIcs], "ders-programi.ics", { type: "text/calendar" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Ders Programı" }); return; }
+  } catch (err) { if (err && err.name === "AbortError") return; }
+  downloadIcs();
+}
+
+// ---------- ayarlar ----------
+function openSettings() { $("settings").hidden = false; $("key").value = apiKey; $("settings").scrollIntoView({ behavior: "smooth" }); }
+
+// ---------- bağlantılar ----------
+$("gear").onclick = () => $("settings").hidden ? openSettings() : ($("settings").hidden = true);
+$("closeSettings").onclick = () => { $("settings").hidden = true; };
+$("saveKey").onclick = () => {
+  const k = $("key").value.trim();
+  if (k && !/^AIza[\w-]{20,}$/.test(k) && !confirm("Gemini anahtarları genellikle “AIza” ile başlar. Yine de kaydedilsin mi?")) return;
+  apiKey = k; store.set("dp_key", k);
+  if (k) $("settings").hidden = true;
+};
+$("cam").onchange = onPhoto;
+$("lib").onchange = onPhoto;
+$("list").onclick = e => { const b = e.target.closest(".lesson"); if (b) openEditor(lessons.find(l => l.id === b.dataset.id)); };
+$("addLesson").onclick = () => openEditor({ id: newId(), course: "", day: 1, start: "", end: "", location: "", teacher: "" });
+$("clear").onclick = () => { if (confirm("Tüm dersler listeden silinsin mi? (Takvim etkilenmez)")) { lessons = []; save(); render(); } };
+$("merge").onchange = e => { settings.merge = e.target.checked; if (settings.merge) lessons = mergeConsecutive(lessons); save(); render(); };
+["pStart", "pLesson", "pBrk", "pLunchAfter", "pLunch"].forEach(id => $(id).addEventListener("change", readPlanInputs));
+$("start").onchange = () => { store.set("dp_start", $("start").value); render(); };
+$("wMinus").onclick = () => { settings.weeks = Math.max(1, settings.weeks - 1); save(); render(); };
+$("wPlus").onclick = () => { settings.weeks = Math.min(52, settings.weeks + 1); save(); render(); };
+$("reminders").onclick = e => { const b = e.target.closest("[data-r]"); if (b) { settings.reminder = +b.dataset.r; save(); render(); } };
+$("addCal").onclick = exportCalendar;
+$("expAgain").onclick = openAppleCalendar;
+$("expShare").onclick = shareIcs;
+$("edDays").onclick = e => { const b = e.target.closest("[data-d]"); if (b) { editing._day = +b.dataset.d; renderDays(); } };
+$("edSave").onclick = saveEditor;
+$("edCancel").onclick = () => $("editor").close();
+$("edDelete").onclick = () => { lessons = lessons.filter(l => l.id !== editing.id); save(); render(); $("editor").close(); };
+$("installClose").onclick = () => { $("install").hidden = true; store.set("dp_install_seen", true); };
+
+// ---------- başlangıç ----------
+$("start").value = store.get("dp_start", "") || ymd(new Date());
+fillPlanInputs();
+if (!apiKey) openSettings();
+if (isIOS && !isStandalone() && !store.get("dp_install_seen", false)) $("install").hidden = false;
+render();
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW kaydı başarısız", err));
+}
+</script>
+</body>
+</html>
