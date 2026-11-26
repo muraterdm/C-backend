@@ -4,6 +4,8 @@ Aylık nöbet listesinin fotoğrafından, **İsim** alanına yazılan ya da list
 
 Canlı adres (GitHub Pages açıldıysa): https://muraterdm.github.io/C-backend/
 
+> 📅 **Yeni:** Ders programı fotoğrafını okuyup telefon takvimine ekleyen Android/iOS uygulaması: [`ders-programi/`](ders-programi/README.md)
+
 ## Telefona yükleme
 
 Uygulama bir PWA'dır: telefona yüklenince ana ekranda simgesiyle açılır, tam ekran çalışır, internet yokken de takvimi gösterir

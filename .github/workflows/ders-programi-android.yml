@@ -1,0 +1,38 @@
+# Ders Programı uygulamasının Android APK'sını ücretsiz olarak GitHub üzerinde derler.
+# Actions sekmesi → "Ders Programı – Android APK" → Run workflow. Bitince APK "Artifacts" altında indirilebilir.
+name: Ders Programı – Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ders-programi/**"
+      - ".github/workflows/ders-programi-android.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ders-programi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ders-programi/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx expo prebuild --platform android --no-install
+      - name: APK derle
+        run: cd android && ./gradlew assembleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ders-programi-apk
+          path: ders-programi/android/app/build/outputs/apk/release/*.apk

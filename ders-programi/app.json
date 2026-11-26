@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Ders Programı",
+    "slug": "ders-programi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.muraterdm.dersprogrami"
+    },
+    "android": {
+      "package": "com.muraterdm.dersprogrami",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Ders programını takvimine eklemek için takvim erişimi gerekiyor."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ders programının fotoğrafını seçmek için fotoğraflara erişim gerekiyor.",
+          "cameraPermission": "Ders programının fotoğrafını çekmek için kamera gerekiyor.",
+          "microphonePermission": false
+        }
+      ]
+    ]
+  }
+}
